@@ -27,6 +27,7 @@ return new class extends Migration
         $table->string('outlet_id');
         $table->string('bahan_master_id');
         $table->decimal('stok', 12, 2)->default(0);
+        $table->decimal('stok_minimum', 12, 2)->default(5);
         $table->date('tanggal_masuk')->nullable();
         $table->date('tanggal_kadaluarsa')->nullable();
         $table->timestamps();
@@ -162,12 +163,60 @@ return new class extends Migration
         $table->foreign('outlet_id')->references('id')->on('outlet')->onDelete('cascade');
         $table->foreign('bahan_master_id')->references('id')->on('bahan_master')->onDelete('set null');
     });
+
+    // Laporan keuangan per outlet per periode
+    Schema::create('laporan_keuangan', function (Blueprint $table) {
+        $table->string('id')->primary();
+        $table->string('outlet_id');
+        $table->decimal('total_pendapatan', 15, 2)->default(0);
+        $table->decimal('total_pengeluaran', 15, 2)->default(0);
+        $table->decimal('total_kerugian', 15, 2)->default(0);
+        $table->decimal('total_keuntungan', 15, 2)->default(0);
+        $table->string('periode');
+        $table->enum('tipe_periode', ['daily', 'monthly'])->default('daily');
+        $table->timestamps();
+
+        $table->foreign('outlet_id')->references('id')->on('outlet')->onDelete('cascade');
+        $table->unique(['outlet_id', 'periode', 'tipe_periode']);
+    });
+    
+    Schema::create('stock_movements', function (Blueprint $table) {
+        $table->string('id')->primary();
+        $table->string('outlet_id');
+        $table->string('bahan_master_id');
+        $table->enum('type', ['in', 'out', 'adjustment']);
+        $table->decimal('quantity', 12, 2);
+        $table->date('expired_date')->nullable();
+        $table->string('reference_id')->nullable();
+        $table->text('note')->nullable();
+        $table->timestamps();
+
+        $table->foreign('outlet_id')->references('id')->on('outlet')->onDelete('cascade');
+        $table->foreign('bahan_master_id')->references('id')->on('bahan_master')->onDelete('cascade');
+    });
+
+    Schema::create('stock_opname', function (Blueprint $table) {
+        $table->string('id')->primary();
+        $table->string('outlet_id');
+        $table->string('bahan_master_id');
+        $table->enum('tipe', ['busuk', 'rusak', 'ga_layak', 'hilang']);
+        $table->decimal('jumlah', 12, 2);
+        $table->string('foto_bukti')->nullable();
+        $table->text('keterangan')->nullable();
+        $table->timestamps();
+
+        $table->foreign('outlet_id')->references('id')->on('outlet')->onDelete('cascade');
+        $table->foreign('bahan_master_id')->references('id')->on('bahan_master')->onDelete('cascade');
+    });
 }
 
 public function down(): void
 {
+    Schema::dropIfExists('laporan_keuangan');
     Schema::dropIfExists('pengeluaran');
     Schema::dropIfExists('kerugian');
+    Schema::dropIfExists('stock_opname');
+    Schema::dropIfExists('stock_movements');
     Schema::dropIfExists('pembayaran');
     Schema::dropIfExists('pesanan_addon');
     Schema::dropIfExists('pesanan_detail');
