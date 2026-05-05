@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Owner\{
     OwnerDashboardController,
     OwnerSubscriptionController,
     UsahaController,
+    AddonController,
 };
 use Illuminate\Support\Facades\Route;
 
@@ -67,4 +68,9 @@ Route::middleware('role:owner')->group(function () {
 
     // Shortcut — owner lihat semua outletnya tanpa perlu tahu usaha_id
     Route::get('outlet', [OutletController::class, 'myOutlets']);
+
+    Route::get   ('addon',      [AddonController::class, 'index']);
+    Route::post  ('addon',      [AddonController::class, 'store']);
+    Route::put   ('addon/{id}', [AddonController::class, 'update']);
+    Route::delete('addon/{id}', [AddonController::class, 'destroy']);
 });

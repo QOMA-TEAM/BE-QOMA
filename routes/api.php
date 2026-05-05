@@ -2,14 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
-
-// Auth (public + protected)
+// Auth
 Route::prefix('auth')->group(base_path('routes/auth.php'));
+
+// Public — pelanggan (TANPA AUTH)
+Route::prefix('public')->group(base_path('routes/public.php'));
 
 // Super Admin
 Route::prefix('super-admin')->group(base_path('routes/superadmin.php'));
