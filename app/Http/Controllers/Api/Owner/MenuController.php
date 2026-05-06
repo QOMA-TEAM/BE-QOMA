@@ -9,10 +9,13 @@ use App\Traits\{HasPagination, OwnerAccess};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Storage};
 use Illuminate\Support\Str;
+use App\Services\ImageService;
 
 class MenuController extends Controller
 {
     use HasPagination, OwnerAccess;
+
+    public function __construct(private ImageService $imageService) {}
 
     // GET /owner/menu?kategori_id=xxx&is_active=1&page=1
     public function index(Request $request)
@@ -85,14 +88,10 @@ class MenuController extends Controller
         return DB::transaction(function () use ($request, $usahaId) {
 
             // Upload gambar
-            $gambarPath = null;
-            if ($request->hasFile('gambar')) {
-                $gambarPath = $request->file('gambar')->storeAs(
-                    "menu/{$usahaId}",
-                    Str::uuid() . '.' . $request->file('gambar')->getClientOriginalExtension(),
-                    'public'
-                );
-            }
+            $gambarPath = $request->hasFile('gambar')
+                ? $this->imageService->upload($request->file('gambar'), "menu/{$usahaId}")
+                : null;
+            
 
             // Buat menu
             $menu = Menu::create([
@@ -176,15 +175,9 @@ class MenuController extends Controller
             $oldHarga = $menu->harga_default;
 
             // Ganti gambar jika ada
-            if ($request->hasFile('gambar')) {
-                if ($menu->gambar) Storage::disk('public')->delete($menu->gambar);
-
-                $data['gambar'] = $request->file('gambar')->storeAs(
-                    "menu/{$usahaId}",
-                    Str::uuid() . '.' . $request->file('gambar')->getClientOriginalExtension(),
-                    'public'
-                );
-            }
+            $data['gambar'] = $request->hasFile('gambar')
+                ? $this->imageService->replace($request->file('gambar'), $menu->gambar, "menu/{$usahaId}")
+                : $menu->gambar;
 
             $menu->update([
                 'kategori_id'   => $request->kategori_id   ?? $menu->kategori_id,

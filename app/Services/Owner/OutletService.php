@@ -20,15 +20,26 @@ class OutletService
                                     ->first();
 
         if (!$subscription) {
-            throw new \Exception('Tidak ada subscription aktif. Silakan subscribe terlebih dahulu.');
+            throw new \Exception('Tidak ada subscription aktif.');
         }
 
-        $batasOutlet    = $subscription->plan->batas_outlet;
-        $jumlahOutlet   = Outlet::where('usaha_id', $usahaId)->count();
+        $batasOutlet  = $subscription->plan->batas_outlet;
+        $jumlahOutlet = Outlet::where('usaha_id', $usahaId)->count();
 
-        // -1 = unlimited (plan pro)
         if ($batasOutlet !== -1 && $jumlahOutlet >= $batasOutlet) {
-            throw new \Exception("Batas outlet plan {$subscription->plan->nama_plan} adalah {$batasOutlet}. Upgrade ke Pro untuk menambah lebih banyak outlet.");
+
+            // Bedakan pesan error berdasarkan plan
+            if ($subscription->plan->is_lifetime) {
+                // Sedang di Free plan
+                throw new \Exception(
+                    "Batas outlet Free plan adalah {$batasOutlet}. " .
+                    "Anda memiliki {$jumlahOutlet} outlet. " .
+                    "Upgrade ke Pro untuk menambah lebih banyak outlet."
+                );
+            } else {
+                // Sedang di Pro tapi outlet sudah penuh (harusnya tidak terjadi karena unlimited)
+                throw new \Exception("Batas outlet tercapai.");
+            }
         }
     }
 

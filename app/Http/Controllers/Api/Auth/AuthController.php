@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Http\Resources\Auth\UserResource;
 
 class AuthController extends Controller
 {
@@ -39,12 +40,7 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type'   => 'bearer',
             'expires_in'   => config('jwt.ttl') * 60,
-            'user'         => [
-                'id'           => $user->id,
-                'username'     => $user->username,
-                'nama_lengkap' => $user->nama_lengkap,
-                'role'         => $user->role->name,
-            ],
+            'user' => new UserResource($user),
         ]);
     }
 

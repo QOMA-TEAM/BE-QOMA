@@ -12,7 +12,7 @@ return new class extends Migration
         $table->string('id')->primary();
         $table->string('role_id')->nullable();
         $table->string('usaha_id')->nullable();
-        $table->string('outlet_id')->nullable(); // ← bukan tenant_id lagi
+        $table->string('outlet_id')->nullable(); 
         $table->string('username')->unique();
         $table->string('nama_lengkap')->nullable();
         $table->string('email')->nullable();

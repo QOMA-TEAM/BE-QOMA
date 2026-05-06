@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Services\SuperAdmin\SubscriptionManagementService;
 use App\Traits\HasPagination;
 use Illuminate\Http\Request;
+use App\Http\Resources\SuperAdmin\SubscriptionDetailResource;
 
 class SubscriptionController extends Controller
 {
@@ -40,7 +41,7 @@ class SubscriptionController extends Controller
     {
         return response()->json([
             'message' => 'Detail subscription',
-            'data'    => $this->service->detail($id),
+            'data'    => new SubscriptionDetailResource($this->service->detail($id)),
         ]);
     }
 
@@ -53,7 +54,7 @@ class SubscriptionController extends Controller
             $sub = $this->service->konfirmasiPembayaran($sub);
             return response()->json([
                 'message' => 'Pembayaran dikonfirmasi. Usaha dan akun owner sekarang aktif.',
-                'data'    => $sub,
+                'data'    => new SubscriptionDetailResource($sub),
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -70,7 +71,7 @@ class SubscriptionController extends Controller
 
         return response()->json([
             'message' => 'Subscription berhasil dibatalkan',
-            'data'    => $sub,
+            'data'    => new SubscriptionDetailResource($sub),
         ]);
     }
 }

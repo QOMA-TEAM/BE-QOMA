@@ -7,12 +7,18 @@ use App\Services\Outlet\BahanOutletService;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use App\Services\ImageService;
+use App\Http\Resources\Outlet\BahanOutletResource;
+use App\Http\Resources\Outlet\StockOpnameResource;
 
 class BahanOutletController extends Controller
 {
     use HasPagination, OutletAccess;
 
-    public function __construct(private BahanOutletService $service) {}
+    public function __construct(
+        private BahanOutletService $service,
+        private ImageService $imageService
+    ) {}
 
     // GET /outlet/bahan-baku?search=x&sort_by=stok&sort_dir=asc&menipis=1
     public function index(Request $request)
@@ -23,7 +29,12 @@ class BahanOutletController extends Controller
             ['per_page' => $this->getPerPage($request)]
         ));
 
-        return response()->json($this->paginateResponse($bahans, 'Daftar bahan baku outlet'));
+        return response()->json(
+            $this->paginateResponse(
+                $bahans->through(fn($b) => new BahanOutletResource($b)),
+                'Daftar bahan baku'
+            )
+        );
     }
 
     // POST /outlet/bahan-baku — tambah stok bahan
@@ -40,7 +51,7 @@ class BahanOutletController extends Controller
 
         try {
             $bahan = $this->service->tambah($outletId, $request->all());
-            return response()->json(['message' => 'Bahan baku berhasil ditambahkan', 'data' => $bahan], 201);
+            return response()->json(['message' => 'Bahan baku berhasil ditambahkan', 'data' => new StockOpnameResource($opname)], 201);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -58,7 +69,7 @@ class BahanOutletController extends Controller
         $bahan = BahanOutlet::where('id', $id)->where('outlet_id', $outletId)->firstOrFail();
         $bahan = $this->service->updateKonfigurasi($bahan, $request->all());
 
-        return response()->json(['message' => 'Konfigurasi bahan diupdate', 'data' => $bahan]);
+        return response()->json(['message' => 'Konfigurasi bahan diupdate', 'data' => new StockOpnameResource($opname)]);
     }
 
     // POST /outlet/stock-opname
@@ -73,18 +84,16 @@ class BahanOutletController extends Controller
             'foto_bukti'      => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $fotoPath = null;
-        if ($request->hasFile('foto_bukti')) {
-            $fotoPath = $request->file('foto_bukti')->storeAs(
-                "stock-opname/{$outletId}",
-                Str::uuid() . '.' . $request->file('foto_bukti')->getClientOriginalExtension(),
-                'public'
-            );
-        }
+        $fotoPath = $request->hasFile('foto_bukti')
+            ? $this->imageService->upload($request->file('foto_bukti'), "stock-opname/{$outletId}")
+            : null;
 
         try {
             $opname = $this->service->stockOpname($outletId, $request->all(), $fotoPath);
-            return response()->json(['message' => 'Stock opname berhasil dicatat', 'data' => $opname], 201);
+           return response()->json([
+            'message' => 'Stock opname berhasil dicatat',
+            'data'    => new StockOpnameResource($opname),
+        ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -99,4 +108,5 @@ class BahanOutletController extends Controller
             'data'    => $this->service->getAlerts($outletId),
         ]);
     }
+    
 }

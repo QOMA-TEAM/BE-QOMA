@@ -80,7 +80,7 @@ class OwnerSubscriptionService
             'usaha_id'   => $usahaId,
             'plan_id'    => $planId,
             'start_date' => now()->toDateString(),
-            'end_date'   => now()->addMonth()->toDateString(),
+            'end_date' => now()->addDays($plan->durasi_hari)->toDateString(),
             'status'     => 'pending', // tunggu konfirmasi super admin
         ]);
 

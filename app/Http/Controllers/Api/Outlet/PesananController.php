@@ -6,6 +6,7 @@ use App\Models\Pesanan;
 use App\Services\Outlet\PesananService;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
+use App\Http\Resources\SuperAdmin\PlanResource;
 
 class PesananController extends Controller
 {
@@ -22,16 +23,22 @@ class PesananController extends Controller
             'per_page' => $this->getPerPage($request),
         ]);
 
-        return response()->json($this->paginateResponse($pesanans, 'Daftar pesanan'));
+        return response()->json(
+            $this->paginateResponse(
+                $pesanans->through(fn($p) => new PesananResource($p)),
+                'Daftar pesanan'
+            )
+        );
+
     }
 
     // GET /outlet/pesanan/{id}
     public function show(string $id)
-    {
+    {   
         $outletId = $this->getOutletId();
         return response()->json([
             'message' => 'Detail pesanan',
-            'data'    => $this->service->getDetail($id, $outletId),
+            'data'    => new PesananResource($pesanan),
         ]);
     }
 
@@ -49,7 +56,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->tambahItem($pesanan, $request->items);
-            return response()->json(['message' => 'Item berhasil ditambahkan', 'data' => $pesanan]);
+            return response()->json(['message' => 'Item berhasil ditambahkan', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -65,7 +72,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->updateQtyItem($pesanan, $detailId, $request->qty);
-            return response()->json(['message' => 'Qty berhasil diupdate', 'data' => $pesanan]);
+            return response()->json(['message' => 'Qty berhasil diupdate', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -79,7 +86,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->hapusItem($pesanan, $detailId);
-            return response()->json(['message' => 'Item berhasil dihapus', 'data' => $pesanan]);
+            return response()->json(['message' => 'Item berhasil dihapus', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -93,7 +100,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->konfirmasi($pesanan);
-            return response()->json(['message' => 'Pesanan dikonfirmasi', 'data' => $pesanan]);
+            return response()->json(['message' => 'Pesanan dikonfirmasi', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -111,7 +118,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->konfirmasiPembayaran($pesanan, $request->metode);
-            return response()->json(['message' => 'Pembayaran berhasil dikonfirmasi', 'data' => $pesanan]);
+            return response()->json(['message' => 'Pembayaran berhasil dikonfirmasi', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -125,7 +132,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->cancel($pesanan);
-            return response()->json(['message' => 'Pesanan dibatalkan', 'data' => $pesanan]);
+            return response()->json(['message' => 'Pesanan dibatalkan', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

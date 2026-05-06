@@ -5,6 +5,7 @@ use App\Models\{BahanMaster, BahanOutlet, StockMovement, StockOpname};
 use App\Services\{ActivityLogService, LaporanKeuanganService};
 use Illuminate\Support\Facades\{DB, Storage};
 use Illuminate\Support\Str;
+use App\Events\StokMenipis;
 
 class BahanOutletService
 {
@@ -117,7 +118,12 @@ class BahanOutletService
 
             // Update laporan keuangan
             $this->laporanService->recalculate($outletId, now()->toDateString());
-
+            
+            $alerts = $this->getAlerts($outletId);
+                if ($alerts['total_alert'] > 0) {
+                    broadcast(new StokMenipis($outletId, $alerts))->toOthers();
+                }
+                
             ActivityLogService::log(
                 'tambah_bahan_outlet',
                 "Tambah stok {$bahanMaster->nama}: +{$data['jumlah']} {$bahanMaster->satuan}",
@@ -125,6 +131,7 @@ class BahanOutletService
                 null,
                 $outletId,
             );
+
 
             return $bahan;
         });

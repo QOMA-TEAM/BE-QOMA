@@ -54,9 +54,9 @@ class RegisterService
                 'usaha_id'   => $usaha->id,
                 'plan_id'    => $plan->id,
                 'start_date' => now()->toDateString(),
-                'end_date'   => $plan->harga > 0
-                                    ? now()->addMonth()->toDateString()  // pro: 1 bulan
-                                    : now()->addDays(14)->toDateString(), // free trial: 14 hari
+                'end_date' => $plan->is_lifetime
+                                ? null  // Free = tidak ada end date
+                                : now()->addDays($plan->durasi_hari)->toDateString(),
                 'status'     => $subStatus,
             ]);
 

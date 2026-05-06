@@ -276,7 +276,7 @@ class UserSeeder extends Seeder
             [
                 'id'         => Str::uuid()->toString(),
                 'usaha_id'   => $usaha2->id,
-                'plan_id'    => 'plan_free_trial',
+                'plan_id'    => 'plan_free',
                 'start_date' => now()->toDateString(),
                 'end_date'   => now()->addDays(14)->toDateString(),
                 'status'     => 'active',

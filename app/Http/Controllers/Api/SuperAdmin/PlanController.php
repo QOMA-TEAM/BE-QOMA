@@ -5,6 +5,7 @@ use App\Models\Plan;
 use App\Services\SuperAdmin\UsahaManagementService;
 use App\Traits\HasPagination;
 use Illuminate\Http\Request;
+use App\Http\Resources\SuperAdmin\PlanResource;
 
 class PlanController extends Controller
 {
@@ -15,7 +16,7 @@ class PlanController extends Controller
     {
         return response()->json([
             'message' => 'Daftar plan',
-            'data'    => $this->service->listPlans(),
+            'data'    => PlanResource::collection($this->service->listPlans()),
         ]);
     }
 
@@ -25,11 +26,12 @@ class PlanController extends Controller
             'nama_plan'    => 'required|string',
             'harga'        => 'required|numeric|min:0',
             'batas_outlet' => 'required|integer|min:-1',
+            'durasi_hari'  => 'required|integer|min:1',
             'deskripsi'    => 'nullable|string',
         ]);
 
         $plan = $this->service->createPlan($request->all());
-        return response()->json(['message' => 'Plan dibuat', 'data' => $plan], 201);
+        return response()->json(['message' => 'Plan dibuat', 'data' =>new PlanResource($plan)], 201);
     }
 
     public function update(Request $request, string $id)
@@ -38,12 +40,13 @@ class PlanController extends Controller
             'nama_plan'    => 'sometimes|string',
             'harga'        => 'sometimes|numeric|min:0',
             'batas_outlet' => 'sometimes|integer|min:-1',
+            'durasi_hari'  => 'required|integer|min:1',
             'deskripsi'    => 'nullable|string',
         ]);
 
         $plan = Plan::findOrFail($id);
         $plan = $this->service->updatePlan($plan, $request->all());
-        return response()->json(['message' => 'Plan diupdate', 'data' => $plan]);
+        return response()->json(['message' => 'Plan diupdate', 'data' => new PlanResource($plan)]);
     }
 
     public function destroy(string $id)

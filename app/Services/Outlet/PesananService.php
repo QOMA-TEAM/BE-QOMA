@@ -5,6 +5,7 @@ use App\Models\{BahanOutlet, LaporanKeuangan, Meja, Menu, MenuOutlet, Pembayaran
 use App\Services\{ActivityLogService, LaporanKeuanganService};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Events\PesananDiupdate;
 
 class PesananService
 {
@@ -86,6 +87,9 @@ class PesananService
             $this->recalculateTotal($pesanan);
         });
 
+        // Broadcast event ke kasir & pelanggan (real-time update)
+        broadcast(new PesananDiupdate($pesanan, 'update'))->toOthers();
+
         return $pesanan->fresh(['meja', 'details.menu', 'pembayaran']);
     }
 
@@ -104,6 +108,9 @@ class PesananService
 
         $detail->delete();
         $this->recalculateTotal($pesanan);
+
+        // Broadcast event ke kasir & pelanggan (real-time update)
+        broadcast(new PesananDiupdate($pesanan, 'update'))->toOthers();
 
         return $pesanan->fresh(['meja', 'details.menu']);
     }
@@ -129,6 +136,9 @@ class PesananService
 
         $this->recalculateTotal($pesanan);
 
+        // Broadcast event ke kasir & pelanggan (real-time update)
+        broadcast(new PesananDiupdate($pesanan, 'update'))->toOthers();
+
         return $pesanan->fresh(['meja', 'details.menu']);
     }
 
@@ -150,6 +160,9 @@ class PesananService
             null,
             $pesanan->outlet_id,
         );
+
+        // Broadcast event ke kasir & pelanggan (real-time update)
+        broadcast(new PesananDiupdate($pesanan, 'konfirmasi'))->toOthers();
 
         return $pesanan->fresh(['meja', 'details.menu']);
     }
@@ -178,6 +191,9 @@ class PesananService
 
             // 1. Update status pesanan
             $pesanan->update(['status' => 'paid']);
+
+            // Broadcast event ke kasir & pelanggan (real-time update)
+            broadcast(new PesananDiupdate($pesanan, 'bayar'))->toOthers();
 
             // 2. Buat record pembayaran
             Pembayaran::create([
@@ -225,6 +241,9 @@ class PesananService
             null,
             $pesanan->outlet_id,
         );
+
+        // Broadcast event ke kasir & pelanggan (real-time update)
+        broadcast(new PesananDiupdate($pesanan, 'cancel'))->toOthers();
 
         return $pesanan->fresh();
     }

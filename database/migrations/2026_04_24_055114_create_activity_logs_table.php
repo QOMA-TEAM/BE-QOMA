@@ -12,7 +12,7 @@ return new class extends Migration
             $table->string('id')->primary();
             $table->string('user_id')->nullable();
             $table->string('usaha_id')->nullable();
-            $table->string('outlet_id')->nullable(); 
+            $table->string('outlet_id')->nullable();
             $table->string('aktivitas');
             $table->text('deskripsi')->nullable();
             $table->json('metadata')->nullable();

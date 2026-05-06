@@ -5,6 +5,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
+use App\Http\Resources\Shared\ActivityLogResource;
+
 
 class ActivityLogController extends Controller
 {
@@ -23,6 +25,11 @@ class ActivityLogController extends Controller
                            ->latest()
                            ->paginate($this->getPerPage($request));
 
-        return response()->json($this->paginateResponse($logs, 'Activity log outlet'));
+        return response()->json(
+            $this->paginateResponse(
+                $logs->through(fn($l) => new ActivityLogResource($l)),
+                'Activity logs'
+            )
+        );
     }
 }

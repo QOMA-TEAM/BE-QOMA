@@ -7,6 +7,7 @@ use App\Models\Usaha;
 use App\Services\SuperAdmin\UsahaManagementService;
 use App\Traits\HasPagination;
 use Illuminate\Http\Request;
+use App\Http\Resources\SuperAdmin\UsahaManagementResource;
 
 class UsahaManagementController extends Controller
 {
@@ -34,7 +35,7 @@ class UsahaManagementController extends Controller
 
         return response()->json([
             'message' => 'Detail usaha',
-            'data'    => $usaha,
+            'data'    =>new UsahaManagementResource($usaha),
         ]);
     }
 
@@ -47,7 +48,7 @@ class UsahaManagementController extends Controller
             $usaha = $this->service->approve($usaha);
             return response()->json([
                 'message' => 'Usaha berhasil di-approve',
-                'data'    => $usaha,
+                'data'    => new UsahaManagementResource($usaha),
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -67,7 +68,7 @@ class UsahaManagementController extends Controller
             $usaha = $this->service->reject($usaha, $request->alasan);
             return response()->json([
                 'message' => 'Usaha berhasil di-reject',
-                'data'    => $usaha,
+                'data'    => new UsahaManagementResource($usaha),
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -87,7 +88,7 @@ class UsahaManagementController extends Controller
             $usaha = $this->service->suspend($usaha, $request->catatan);
             return response()->json([
                 'message' => 'Usaha berhasil disuspend',
-                'data'    => $usaha,
+                'data'    => new UsahaManagementResource($usaha),
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -103,7 +104,7 @@ class UsahaManagementController extends Controller
             $usaha = $this->service->unsuspend($usaha);
             return response()->json([
                 'message' => 'Usaha berhasil diaktifkan kembali',
-                'data'    => $usaha,
+                'data'    => new UsahaManagementResource($usaha),
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);

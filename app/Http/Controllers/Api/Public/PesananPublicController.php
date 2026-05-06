@@ -8,6 +8,7 @@ use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Events\PesananBaru;
 
 class PesananPublicController extends Controller
 {
@@ -178,6 +179,9 @@ class PesananPublicController extends Controller
                 null,
                 $outlet->id,
             );
+
+            // Broadcast event ke kasir (real-time update)
+            broadcast(new PesananBaru($pesanan->load('meja', 'details')))->toOthers();
 
             // Response ke pelanggan
             return response()->json([

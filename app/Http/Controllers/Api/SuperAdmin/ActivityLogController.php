@@ -5,10 +5,15 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Traits\HasPagination;
 use Illuminate\Http\Request;
+use App\Http\Resources\Shared\ActivityLogResource;
 
 class ActivityLogController extends Controller
 {
     use HasPagination;
+
+    /**
+     * @authenticated
+     */
 
     // GET /super-admin/activity-logs?usaha_id=x&aktivitas=approve_usaha&dari=2026-01-01
     public function index(Request $request)
@@ -40,6 +45,11 @@ class ActivityLogController extends Controller
 
         $logs = $query->paginate($this->getPerPage($request));
 
-        return response()->json($this->paginateResponse($logs, 'Activity logs'));
+        return response()->json(
+            $this->paginateResponse(
+                $logs->through(fn($l) => new ActivityLogResource($l)),
+                'Activity logs'
+            )
+        );
     }
 }

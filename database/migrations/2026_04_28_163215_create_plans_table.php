@@ -11,8 +11,10 @@ return new class extends Migration
         Schema::create('plans', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('nama_plan'); // free trial, pro
-            $table->decimal('harga', 15, 2);
+            $table->decimal('harga', 15, 2); 
             $table->integer('batas_outlet');
+            $table->integer('durasi_hari')->default(30);
+            $table->boolean('is_lifetime')->default(false); 
             $table->string('deskripsi')->nullable();
             $table->timestamps();
         });

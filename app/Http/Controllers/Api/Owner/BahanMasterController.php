@@ -9,10 +9,16 @@ use App\Traits\{HasPagination, OwnerAccess};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Storage, DB};
 use Illuminate\Support\Str;
+use App\Services\ImageService;
 
 class BahanMasterController extends Controller
 {
+    
     use HasPagination, OwnerAccess;
+
+    /**
+     * Ambil daftar bahan baku milik owner
+     */
 
     // GET /owner/bahan-baku?search=beras&page=1
     public function index(Request $request)
@@ -55,14 +61,9 @@ class BahanMasterController extends Controller
             ], 422);
         }
 
-        $gambarPath = null;
-        if ($request->hasFile('gambar')) {
-            $gambarPath = $request->file('gambar')->storeAs(
-                "bahan-master/{$usahaId}",
-                Str::uuid() . '.' . $request->file('gambar')->getClientOriginalExtension(),
-                'public'
-            );
-        }
+        $gambarPath = $request->hasFile('gambar')
+            ? $this->imageService->upload($request->file('gambar'), "bahan-master/{$usahaId}")
+            : null;
 
         $bahan = BahanMaster::create([
             'id'            => Str::uuid(),
@@ -110,15 +111,9 @@ class BahanMasterController extends Controller
             'gambar'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        $gambarPath = $bahan->gambar;
-        if ($request->hasFile('gambar')) {
-            if ($bahan->gambar) Storage::disk('public')->delete($bahan->gambar);
-            $gambarPath = $request->file('gambar')->storeAs(
-                "bahan-master/{$usahaId}",
-                Str::uuid() . '.' . $request->file('gambar')->getClientOriginalExtension(),
-                'public'
-            );
-        }
+        $gambarPath = $request->hasFile('gambar')
+            ? $this->imageService->replace($request->file('gambar'), $bahan->gambar, "bahan-master/{$usahaId}")
+            : $bahan->gambar;
 
         $bahan->update([
             'nama'          => $request->nama          ?? $bahan->nama,
@@ -170,4 +165,7 @@ class BahanMasterController extends Controller
 
         return response()->json(['message' => 'Bahan baku berhasil dihapus']);
     }
+
+    public function __construct(private ImageService $imageService) {}
+    
 }

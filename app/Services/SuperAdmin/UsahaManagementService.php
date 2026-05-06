@@ -193,6 +193,13 @@ class UsahaManagementService
         ActivityLogService::log('delete_plan', "Plan '{$plan->nama_plan}' dihapus");
     }
 
+    public function ownerByUsaha(string $usahaId)
+    {
+        $usaha = Usaha::with('owner')->findOrFail($usahaId);
+
+        return $usaha->owner;
+    }
+
     private function toggleUsahaUsers(Usaha $usaha, bool $isActive): void
     {
         User::where('usaha_id', $usaha->id)->update(['is_active' => $isActive]);
