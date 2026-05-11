@@ -51,7 +51,7 @@ class BahanOutletController extends Controller
 
         try {
             $bahan = $this->service->tambah($outletId, $request->all());
-            return response()->json(['message' => 'Bahan baku berhasil ditambahkan', 'data' => new StockOpnameResource($opname)], 201);
+            return response()->json(['message' => 'Bahan baku berhasil ditambahkan', 'data' => new BahanOutletResource($bahan)], 201);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -69,7 +69,7 @@ class BahanOutletController extends Controller
         $bahan = BahanOutlet::where('id', $id)->where('outlet_id', $outletId)->firstOrFail();
         $bahan = $this->service->updateKonfigurasi($bahan, $request->all());
 
-        return response()->json(['message' => 'Konfigurasi bahan diupdate', 'data' => new StockOpnameResource($opname)]);
+        return response()->json(['message' => 'Konfigurasi bahan diupdate', 'data' => new BahanOutletResource($bahan)]);
     }
 
     // POST /outlet/stock-opname

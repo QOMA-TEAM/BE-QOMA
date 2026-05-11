@@ -7,6 +7,7 @@ use App\Services\Outlet\PesananService;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
 use App\Http\Resources\SuperAdmin\PlanResource;
+use App\Http\Resources\Outlet\PesananResource;
 
 class PesananController extends Controller
 {

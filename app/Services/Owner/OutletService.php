@@ -1,7 +1,7 @@
 <?php
 namespace App\Services\Owner;
 use App\Models\{Menu, MenuOutlet, Outlet, Role, Subscription, User};
-use App\Services\{ActivityLogService, NotificationService};
+use App\Services\{ActivityLogService};
 use Illuminate\Support\Facades\{DB, Hash};
 use Illuminate\Support\Str;
 

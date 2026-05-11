@@ -1,6 +1,6 @@
 <?php
 namespace App\Services\SuperAdmin;
-use App\Models\{Outlet, Subscription, Usaha, UsahaRejection, User};
+use App\Models\{Usaha, UsahaRejection, User};
 use App\Services\{ActivityLogService, NotificationService};
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;

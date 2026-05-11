@@ -108,7 +108,7 @@ class DashboardService
                 // 12 bulan terakhir, group per bulan
                 $data = $query->where('subscriptions.start_date', '>=', now()->subMonths(12))
                     ->select(
-                        DB::raw('DATE_FORMAT(subscriptions.start_date, "%Y-%m") as bulan'),
+                        DB::raw("TO_CHAR(subscriptions.start_date, 'YYYY-MM') as bulan"),
                         DB::raw('SUM(plans.harga) as total'),
                         DB::raw('COUNT(*) as jumlah_subscriber')
                     )

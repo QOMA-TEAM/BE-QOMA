@@ -13,9 +13,14 @@ return new class extends Migration
             $table->string('nama_usaha');
             $table->string('email');
             $table->string('alamat')->nullable();
-            $table->string('owner_id')->nullable(); // FK ke users, set after
-            $table->enum('status', ['pending', 'active', 'rejected'])->default('pending'); 
+            $table->string('owner_id')->nullable();
+            $table->enum('status', ['pending', 'active', 'rejected'])
+                  ->default('pending');
             $table->timestamp('approved_at')->nullable();
+
+            $table->timestamp('rejected_at')->nullable();
+            $table->text('catatan_admin')->nullable();
+
             $table->timestamps();
         });
     }
