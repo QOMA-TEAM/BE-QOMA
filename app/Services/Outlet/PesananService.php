@@ -1,11 +1,11 @@
 <?php
 namespace App\Services\Outlet;
 
-use App\Models\{BahanOutlet, LaporanKeuangan, Meja, Menu, MenuOutlet, Pembayaran, Pesanan, PesananDetail, StockMovement};
+use App\Events\{PesananDiupdate, PesananExpired};
+use App\Models\{BahanOutlet, Meja, Menu, MenuOutlet, Pembayaran, Pesanan, PesananDetail, StockMovement};
 use App\Services\{ActivityLogService, LaporanKeuanganService};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Events\PesananDiupdate;
 
 class PesananService
 {
@@ -14,10 +14,14 @@ class PesananService
     ) {}
 
     /**
-     * Ambil list pesanan milik outlet ini
+     * Ambil list pesanan milik outlet
+     * Auto-expire pesanan pending yang sudah lewat 10 menit
      */
     public function getList(string $outletId, array $filters = [])
     {
+        // Auto expire dulu sebelum return list
+        $this->autoExpirePesanan($outletId);
+
         $query = Pesanan::where('outlet_id', $outletId)
                         ->with(['meja:id,nomor_meja', 'details.menu:id,nama'])
                         ->latest();
@@ -26,27 +30,222 @@ class PesananService
             $query->where('status', $filters['status']);
         }
 
+        // Default: jangan tampilkan yang expired di list kasir
+        if (empty($filters['status'])) {
+            $query->whereNotIn('status', ['expired']);
+        }
+
         return $query->paginate($filters['per_page'] ?? 15);
     }
 
     /**
-     * Detail 1 pesanan
+     * Detail 1 pesanan — cek expired dulu
      */
     public function getDetail(string $pesananId, string $outletId): Pesanan
     {
-        return Pesanan::where('id', $pesananId)
-                      ->where('outlet_id', $outletId)
-                      ->with([
-                          'meja:id,nomor_meja',
-                          'details.menu:id,nama,gambar',
-                          'details.addons.addon:id,nama,harga',
-                          'pembayaran',
-                      ])
-                      ->firstOrFail();
+        $pesanan = Pesanan::where('id', $pesananId)
+                          ->where('outlet_id', $outletId)
+                          ->with([
+                              'meja:id,nomor_meja',
+                              'details.menu:id,nama,gambar',
+                              'details.addons.addon:id,nama,harga',
+                              'pembayaran',
+                          ])
+                          ->firstOrFail();
+
+        // Cek dan proses expired saat detail diakses
+        if ($pesanan->isExpired()) {
+            $this->prosesExpired($pesanan);
+            $pesanan->refresh();
+        }
+
+        return $pesanan;
     }
 
     /**
-     * Kasir tambah item ke pesanan (sebelum paid)
+     * Buat pesanan baru — set expired_at 10 menit dari sekarang
+     * Dipanggil dari PesananPublicController
+     */
+    public function buatPesanan(array $data): Pesanan
+    {
+        return Pesanan::create(array_merge($data, [
+            'expired_at' => now()->addMinutes(10), // ← 10 menit dari created_at
+        ]));
+    }
+
+    /**
+     * Konfirmasi pesanan oleh kasir (pending → confirmed)
+     * Reset expired_at karena kasir sudah konfirmasi
+     */
+    public function konfirmasi(Pesanan $pesanan): Pesanan
+    {
+        if ($pesanan->status === 'expired') {
+            throw new \Exception('Pesanan sudah expired, tidak bisa dikonfirmasi.');
+        }
+
+        if ($pesanan->status !== 'pending') {
+            throw new \Exception('Hanya pesanan berstatus pending yang bisa dikonfirmasi.');
+        }
+
+        // Cek expired sebelum konfirmasi
+        if ($pesanan->isExpired()) {
+            $this->prosesExpired($pesanan);
+            throw new \Exception('Pesanan sudah expired karena melewati batas waktu 10 menit.');
+        }
+
+        $pesanan->update([
+            'status'     => 'confirmed',
+            'expired_at' => null, // ← hapus expired_at setelah dikonfirmasi
+        ]);
+
+        ActivityLogService::log(
+            'konfirmasi_pesanan',
+            "Pesanan #{$pesanan->id} dikonfirmasi",
+            ['pesanan_id' => $pesanan->id],
+            null,
+            $pesanan->outlet_id,
+        );
+
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'konfirmasi'))->toOthers();
+
+        return $pesanan->fresh(['meja', 'details.menu']);
+    }
+
+    /**
+     * Update tipe pesanan (dine_in ↔ take_away)
+     * Bisa diubah kasir sampai sebelum paid
+     */
+    public function updateTipePesanan(Pesanan $pesanan, string $tipe): Pesanan
+    {
+        if ($pesanan->status === 'paid') {
+            throw new \Exception('Pesanan sudah dibayar, tidak bisa diubah.');
+        }
+
+        if ($pesanan->status === 'expired') {
+            throw new \Exception('Pesanan sudah expired.');
+        }
+
+        if (!in_array($tipe, ['dine_in', 'take_away'])) {
+            throw new \Exception('Tipe pesanan tidak valid. Gunakan: dine_in atau take_away');
+        }
+
+        $tipeLama = $pesanan->tipe_pesanan;
+        $pesanan->update(['tipe_pesanan' => $tipe]);
+
+        ActivityLogService::log(
+            'update_tipe_pesanan',
+            "Tipe pesanan #{$pesanan->id} diubah dari {$tipeLama} ke {$tipe}",
+            ['pesanan_id' => $pesanan->id, 'tipe_lama' => $tipeLama, 'tipe_baru' => $tipe],
+            null,
+            $pesanan->outlet_id,
+        );
+
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'update_tipe'))->toOthers();
+
+        return $pesanan->fresh(['meja', 'details.menu']);
+    }
+
+    /**
+     * Pelanggan cancel pesanan (hanya status pending)
+     */
+    public function cancelOlehPelanggan(Pesanan $pesanan): Pesanan
+    {
+        if ($pesanan->status !== 'pending') {
+            throw new \Exception('Pesanan hanya bisa dibatalkan saat masih pending.');
+        }
+
+        if ($pesanan->isExpired()) {
+            $this->prosesExpired($pesanan);
+            throw new \Exception('Pesanan sudah expired.');
+        }
+
+        $pesanan->update(['status' => 'cancelled']);
+
+        ActivityLogService::log(
+            'cancel_pesanan_pelanggan',
+            "Pesanan #{$pesanan->id} dibatalkan oleh pelanggan",
+            ['pesanan_id' => $pesanan->id],
+            null,
+            $pesanan->outlet_id,
+        );
+
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'cancel'))->toOthers();
+
+        return $pesanan->fresh();
+    }
+
+    /**
+     * Cancel oleh kasir
+     */
+    public function cancel(Pesanan $pesanan): Pesanan
+    {
+        if ($pesanan->status === 'paid') {
+            throw new \Exception('Pesanan sudah dibayar, tidak bisa dibatalkan.');
+        }
+
+        $pesanan->update(['status' => 'cancelled']);
+
+        ActivityLogService::log(
+            'cancel_pesanan',
+            "Pesanan #{$pesanan->id} dibatalkan oleh kasir",
+            ['pesanan_id' => $pesanan->id],
+            null,
+            $pesanan->outlet_id,
+        );
+
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'cancel'))->toOthers();
+
+        return $pesanan->fresh();
+    }
+
+    /**
+     * Konfirmasi pembayaran (confirmed → paid)
+     */
+    public function konfirmasiPembayaran(Pesanan $pesanan, string $metode): Pesanan
+    {
+        if ($pesanan->status === 'paid') {
+            throw new \Exception('Pesanan sudah dibayar sebelumnya.');
+        }
+
+        if ($pesanan->status === 'expired') {
+            throw new \Exception('Pesanan sudah expired.');
+        }
+
+        if ($pesanan->status !== 'confirmed') {
+            throw new \Exception('Pesanan harus dikonfirmasi dulu sebelum pembayaran.');
+        }
+
+        return DB::transaction(function () use ($pesanan, $metode) {
+            $pesanan->update(['status' => 'paid']);
+
+            Pembayaran::create([
+                'id'           => Str::uuid(),
+                'pesanan_id'   => $pesanan->id,
+                'metode'       => $metode,
+                'jumlah_bayar' => $pesanan->total_harga,
+                'status'       => 'paid',
+                'psid_at'      => now(),
+            ]);
+
+            $this->kurangiStokOtomatis($pesanan);
+            $this->laporanService->recalculate($pesanan->outlet_id, now()->toDateString());
+
+            ActivityLogService::log(
+                'konfirmasi_pembayaran',
+                "Pembayaran pesanan #{$pesanan->id} dikonfirmasi via {$metode}. Total: Rp " . number_format($pesanan->total_harga),
+                ['pesanan_id' => $pesanan->id, 'metode' => $metode, 'total' => $pesanan->total_harga],
+                null,
+                $pesanan->outlet_id,
+            );
+
+            broadcast(new PesananDiupdate($pesanan->fresh(), 'bayar'))->toOthers();
+
+            return $pesanan->fresh(['meja', 'details.menu', 'pembayaran']);
+        });
+    }
+
+    /**
+     * Tambah item — cek expired dulu
      */
     public function tambahItem(Pesanan $pesanan, array $items): Pesanan
     {
@@ -54,18 +253,23 @@ class PesananService
             throw new \Exception('Pesanan sudah dibayar, tidak bisa diubah.');
         }
 
+        if ($pesanan->status === 'expired') {
+            throw new \Exception('Pesanan sudah expired.');
+        }
+
+        if ($pesanan->isExpired()) {
+            $this->prosesExpired($pesanan);
+            throw new \Exception('Pesanan expired saat proses berlangsung.');
+        }
+
         DB::transaction(function () use ($pesanan, $items) {
             foreach ($items as $item) {
-                $menu = Menu::findOrFail($item['menu_id']);
-
-                // Ambil harga dari menu_outlet (harga override per outlet)
+                $menu       = Menu::findOrFail($item['menu_id']);
                 $menuOutlet = MenuOutlet::where('menu_id', $menu->id)
                                         ->where('outlet_id', $pesanan->outlet_id)
                                         ->first();
-
                 $harga = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
 
-                // Cek apakah item sudah ada di pesanan → update qty
                 $existing = PesananDetail::where('pesanan_id', $pesanan->id)
                                          ->where('menu_id', $menu->id)
                                          ->first();
@@ -82,24 +286,26 @@ class PesananService
                     ]);
                 }
             }
-
-            // Recalculate total harga
             $this->recalculateTotal($pesanan);
         });
 
-        // Broadcast event ke kasir & pelanggan (real-time update)
-        broadcast(new PesananDiupdate($pesanan, 'update'))->toOthers();
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'edit_item'))->toOthers();
 
         return $pesanan->fresh(['meja', 'details.menu', 'pembayaran']);
     }
 
     /**
-     * Kasir hapus item dari pesanan (sebelum paid)
+     * Hapus item
      */
     public function hapusItem(Pesanan $pesanan, string $detailId): Pesanan
     {
         if ($pesanan->status === 'paid') {
             throw new \Exception('Pesanan sudah dibayar, tidak bisa diubah.');
+        }
+
+        if ($pesanan->isExpired()) {
+            $this->prosesExpired($pesanan);
+            throw new \Exception('Pesanan sudah expired.');
         }
 
         $detail = PesananDetail::where('id', $detailId)
@@ -109,19 +315,23 @@ class PesananService
         $detail->delete();
         $this->recalculateTotal($pesanan);
 
-        // Broadcast event ke kasir & pelanggan (real-time update)
-        broadcast(new PesananDiupdate($pesanan, 'update'))->toOthers();
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'edit_item'))->toOthers();
 
         return $pesanan->fresh(['meja', 'details.menu']);
     }
 
     /**
-     * Update qty item pesanan
+     * Update qty item
      */
     public function updateQtyItem(Pesanan $pesanan, string $detailId, int $qty): Pesanan
     {
         if ($pesanan->status === 'paid') {
             throw new \Exception('Pesanan sudah dibayar, tidak bisa diubah.');
+        }
+
+        if ($pesanan->isExpired()) {
+            $this->prosesExpired($pesanan);
+            throw new \Exception('Pesanan sudah expired.');
         }
 
         $detail = PesananDetail::where('id', $detailId)
@@ -135,117 +345,9 @@ class PesananService
         }
 
         $this->recalculateTotal($pesanan);
-
-        // Broadcast event ke kasir & pelanggan (real-time update)
-        broadcast(new PesananDiupdate($pesanan, 'update'))->toOthers();
+        broadcast(new PesananDiupdate($pesanan->fresh(), 'edit_item'))->toOthers();
 
         return $pesanan->fresh(['meja', 'details.menu']);
-    }
-
-    /**
-     * Konfirmasi pesanan (pending → confirmed)
-     */
-    public function konfirmasi(Pesanan $pesanan): Pesanan
-    {
-        if ($pesanan->status !== 'pending') {
-            throw new \Exception('Hanya pesanan berstatus pending yang bisa dikonfirmasi.');
-        }
-
-        $pesanan->update(['status' => 'confirmed']);
-
-        ActivityLogService::log(
-            'konfirmasi_pesanan',
-            "Pesanan #{$pesanan->id} dikonfirmasi",
-            ['pesanan_id' => $pesanan->id],
-            null,
-            $pesanan->outlet_id,
-        );
-
-        // Broadcast event ke kasir & pelanggan (real-time update)
-        broadcast(new PesananDiupdate($pesanan, 'konfirmasi'))->toOthers();
-
-        return $pesanan->fresh(['meja', 'details.menu']);
-    }
-
-    /**
-     * Konfirmasi pembayaran (confirmed → paid)
-     *
-     * Flow setelah paid:
-     * 1. Update status pesanan
-     * 2. Buat record pembayaran
-     * 3. Auto kurangi stok bahan baku
-     * 4. Catat stock movement
-     * 5. Recalculate laporan keuangan
-     */
-    public function konfirmasiPembayaran(Pesanan $pesanan, string $metode): Pesanan
-    {
-        if ($pesanan->status === 'paid') {
-            throw new \Exception('Pesanan sudah dibayar sebelumnya.');
-        }
-
-        if ($pesanan->status !== 'confirmed') {
-            throw new \Exception('Pesanan harus dikonfirmasi dulu sebelum pembayaran.');
-        }
-
-        return DB::transaction(function () use ($pesanan, $metode) {
-
-            // 1. Update status pesanan
-            $pesanan->update(['status' => 'paid']);
-
-            // Broadcast event ke kasir & pelanggan (real-time update)
-            broadcast(new PesananDiupdate($pesanan, 'bayar'))->toOthers();
-
-            // 2. Buat record pembayaran
-            Pembayaran::create([
-                'id'          => Str::uuid(),
-                'pesanan_id'  => $pesanan->id,
-                'metode'      => $metode,
-                'jumlah_bayar'=> $pesanan->total_harga,
-                'status'      => 'paid',
-                'psid_at'     => now(),
-            ]);
-
-            // 3. Auto kurangi stok bahan baku
-            $this->kurangiStokOtomatis($pesanan);
-
-            // 4. Update laporan keuangan hari ini
-            $this->laporanService->recalculate($pesanan->outlet_id, now()->toDateString());
-
-            ActivityLogService::log(
-                'konfirmasi_pembayaran',
-                "Pembayaran pesanan #{$pesanan->id} dikonfirmasi via {$metode}. Total: Rp " . number_format($pesanan->total_harga),
-                ['pesanan_id' => $pesanan->id, 'metode' => $metode, 'total' => $pesanan->total_harga],
-                null,
-                $pesanan->outlet_id,
-            );
-
-            return $pesanan->fresh(['meja', 'details.menu', 'pembayaran']);
-        });
-    }
-
-    /**
-     * Cancel pesanan
-     */
-    public function cancel(Pesanan $pesanan): Pesanan
-    {
-        if ($pesanan->status === 'paid') {
-            throw new \Exception('Pesanan sudah dibayar, tidak bisa dibatalkan.');
-        }
-
-        $pesanan->update(['status' => 'cancelled']);
-
-        ActivityLogService::log(
-            'cancel_pesanan',
-            "Pesanan #{$pesanan->id} dibatalkan",
-            ['pesanan_id' => $pesanan->id],
-            null,
-            $pesanan->outlet_id,
-        );
-
-        // Broadcast event ke kasir & pelanggan (real-time update)
-        broadcast(new PesananDiupdate($pesanan, 'cancel'))->toOthers();
-
-        return $pesanan->fresh();
     }
 
     // ============================================================
@@ -262,8 +364,42 @@ class PesananService
     }
 
     /**
-     * Auto kurangi stok saat pesanan dibayar
+     * Proses expired — update status + broadcast
      */
+    private function prosesExpired(Pesanan $pesanan): void
+    {
+        if ($pesanan->status !== 'pending') return;
+
+        $pesanan->update(['status' => 'expired']);
+
+        ActivityLogService::log(
+            'pesanan_expired',
+            "Pesanan #{$pesanan->id} expired (melebihi 10 menit)",
+            ['pesanan_id' => $pesanan->id],
+            null,
+            $pesanan->outlet_id,
+        );
+
+        // Broadcast ke kasir (hilang dari list) & pelanggan (tampil pesan expired)
+        broadcast(new PesananExpired($pesanan))->toOthers();
+    }
+
+    /**
+     * Auto expire semua pesanan pending yang sudah lewat 10 menit
+     * Dipanggil saat kasir fetch list pesanan
+     */
+    private function autoExpirePesanan(string $outletId): void
+    {
+        $pesananExpired = Pesanan::where('outlet_id', $outletId)
+                                 ->where('status', 'pending')
+                                 ->where('expired_at', '<=', now())
+                                 ->get();
+
+        foreach ($pesananExpired as $pesanan) {
+            $this->prosesExpired($pesanan);
+        }
+    }
+
     private function kurangiStokOtomatis(Pesanan $pesanan): void
     {
         $details = PesananDetail::where('pesanan_id', $pesanan->id)
@@ -274,7 +410,6 @@ class PesananService
             foreach ($detail->menu->bahanMasters as $bahan) {
                 $jumlahKurang = $bahan->pivot->jumlah_pakai * $detail->qty;
 
-                // Kurangi stok di bahan_outlet
                 $bahanOutlet = BahanOutlet::where('outlet_id', $pesanan->outlet_id)
                                           ->where('bahan_master_id', $bahan->id)
                                           ->first();
@@ -282,7 +417,6 @@ class PesananService
                 if ($bahanOutlet) {
                     $bahanOutlet->decrement('stok', $jumlahKurang);
 
-                    // Catat stock movement
                     StockMovement::create([
                         'id'              => Str::uuid(),
                         'outlet_id'       => $pesanan->outlet_id,

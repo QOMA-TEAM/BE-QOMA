@@ -40,6 +40,8 @@ class PesananPublicController extends Controller
             'items.*.addons'             => 'nullable|array',
             'items.*.addons.*.addon_id'  => 'required|string|exists:addon,id',
             'items.*.addons.*.qty'       => 'required|integer|min:1',
+            'tipe_pesanan' => 'nullable|in:dine_in,take_away',
+            'expired_at'     => now()->addMinutes(10),
         ]);
 
         // 1. Validasi outlet buka
@@ -149,6 +151,8 @@ class PesananPublicController extends Controller
                 'no_telp'        => $request->no_telp,
                 'total_harga'    => $totalHarga,
                 'status'         => 'pending',
+                'tipe_pesanan'   => $request->tipe_pesanan ?? 'dine_in', 
+                'expired_at'     => now()->addMinutes(10),                
             ]);
 
             // Simpan detail item + addon
@@ -235,6 +239,10 @@ class PesananPublicController extends Controller
             return response()->json(['message' => 'Pesanan tidak ditemukan.'], 404);
         }
 
+        $sisaDetik = $pesanan->expired_at && $pesanan->status === 'pending'
+            ? max(0, now()->diffInSeconds($pesanan->expired_at, false))
+            : null;
+
         $statusLabel = match($pesanan->status) {
             'pending'   => 'Menunggu konfirmasi kasir',
             'confirmed' => 'Dikonfirmasi — silakan lakukan pembayaran',
@@ -252,6 +260,10 @@ class PesananPublicController extends Controller
                 'no_telp'        => $pesanan->no_telp,
                 'status'         => $pesanan->status,
                 'status_label'   => $statusLabel,
+                'tipe_pesanan'     => $pesanan->tipe_pesanan,
+                'expired_at'       => $pesanan->expired_at?->format('Y-m-d H:i:s'),
+                'sisa_waktu_detik' => $sisaDetik,
+                'is_expired'       => $pesanan->status === 'expired',
                 'total_harga'    => (float) $pesanan->total_harga,
                 'items'          => $pesanan->details->map(fn($d) => [
                     'nama'    => $d->menu->nama ?? '-',
@@ -271,5 +283,29 @@ class PesananPublicController extends Controller
                 ] : null,
             ],
         ]);
+    }
+
+    // POST /public/pesanan/{id}/cancel
+    public function cancel(Request $request, string $id)
+    {
+        $request->validate([
+            'outlet_id' => 'required|string|exists:outlet,id',
+        ]);
+
+        $pesanan = Pesanan::where('id', $id)
+                        ->where('outlet_id', $request->outlet_id)
+                        ->firstOrFail();
+
+        try {
+            $pesanan = app(\App\Services\Outlet\PesananService::class)
+                        ->cancelOlehPelanggan($pesanan);
+
+            return response()->json([
+                'message' => 'Pesanan berhasil dibatalkan.',
+                'data'    => ['pesanan_id' => $pesanan->id, 'status' => $pesanan->status],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 }

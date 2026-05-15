@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Owner\{
     OwnerSubscriptionController,
     UsahaController,
     AddonController,
+    ApprovalHargaController,
 };
 use Illuminate\Support\Facades\Route;
 
@@ -131,4 +132,9 @@ Route::middleware(['role:owner', 'check.subscription'])->group(function () {
     Route::post  ('addon',      [AddonController::class, 'store']);
     Route::put   ('addon/{id}', [AddonController::class, 'update']);
     Route::delete('addon/{id}', [AddonController::class, 'destroy']);
+
+    // konfirmasi perubahan harga menu oleh outlet
+    Route::get ('approval-harga',             [ApprovalHargaController::class, 'index']);
+    Route::post('approval-harga/{id}/approve',[ApprovalHargaController::class, 'approve']);
+    Route::post('approval-harga/{id}/reject', [ApprovalHargaController::class, 'reject']);
 });

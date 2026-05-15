@@ -138,4 +138,22 @@ class PesananController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
+
+    // PATCH /outlet/pesanan/{id}/tipe
+    public function updateTipe(Request $request, string $id)
+    {
+        $outletId = $this->getOutletId();
+        $request->validate([
+            'tipe_pesanan' => 'required|in:dine_in,take_away',
+        ]);
+
+        $pesanan = Pesanan::where('id', $id)->where('outlet_id', $outletId)->firstOrFail();
+
+        try {
+            $pesanan = $this->service->updateTipePesanan($pesanan, $request->tipe_pesanan);
+            return response()->json(['message' => 'Tipe pesanan diupdate', 'data' => $pesanan]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
 }

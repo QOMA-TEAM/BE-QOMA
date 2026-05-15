@@ -7,9 +7,11 @@ use App\Http\Controllers\Api\Outlet\{
     MenuOutletController,
     OutletDashboardController,
     PesananController,
+    KeuanganOutletController,
+    ApprovalHargaController,
 };
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\Outlet\KeuanganOutletController;
+
 
 Route::middleware('role:outlet')->group(function () {
 
@@ -44,6 +46,14 @@ Route::middleware('role:outlet')->group(function () {
     Route::patch('menu/{menu_id}/harga',    [MenuOutletController::class, 'updateHarga']);
 
     Route::get('keuangan', [KeuanganOutletController::class, 'index']);
+
+    
+    // Tipe pesanan
+    Route::patch('pesanan/{id}/tipe', [PesananController::class, 'updateTipe']);
+    
+    // Approval harga menu
+    Route::get ('approval-harga',      [ApprovalHargaController::class, 'index']);
+    Route::post('approval-harga',      [ApprovalHargaController::class, 'store']);
 
     // Activity Log
     Route::get('activity-log', [ActivityLogController::class, 'index']);
