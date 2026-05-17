@@ -54,7 +54,6 @@ class OutletService
     public function create(array $data, string $usahaId): array
     {
         return DB::transaction(function () use ($data, $usahaId) {
-            // Cek limit outlet dari subscription
             $this->validateOutletLimit($usahaId);
 
             // Buat outlet
@@ -64,33 +63,28 @@ class OutletService
                 'nama_outlet' => $data['nama_outlet'],
                 'alamat'      => $data['alamat'] ?? null,
                 'status_buka' => true,
-                'email'       => $data['email'] ?? null,
+                'email'       => $data['email_outlet'] ?? null,
             ]);
 
-            // Auto generate akun outlet
-            $role          = Role::where('name', 'outlet')->first();
-            $suffix        = strtolower(Str::random(4));
-            $slug          = strtolower(Str::slug($data['nama_outlet'], '_'));
-            $username      = "outlet_{$slug}_{$suffix}";
-            $plainPassword = Str::random(10);
+            // Akun outlet — pakai username & password dari input owner
+            $role = Role::where('name', 'outlet')->first();
 
             $user = User::create([
-                'id'           => Str::uuid(),
-                'role_id'      => $role->id,
-                'usaha_id'     => $usahaId,
-                'outlet_id'    => $outlet->id,
-                'username'     => $username,
-                'password'     => Hash::make($plainPassword),
-                'email'        => $data['email'] ?? null,
-                'is_active'    => true,
+                'id'        => Str::uuid(),
+                'role_id'   => $role->id,
+                'usaha_id'  => $usahaId,
+                'outlet_id' => $outlet->id,
+                'username'  => $data['username'],                  
+                'password'  => Hash::make($data['password']),      
+                'email'     => $data['email_outlet'] ?? null,
+                'is_active' => true,
             ]);
 
-            // Auto sync semua menu usaha ke outlet baru
             $this->syncMenuOutlet($outlet->id, $usahaId);
 
             ActivityLogService::log(
                 'create_outlet',
-                "Outlet '{$outlet->nama_outlet}' dibuat",
+                "Outlet '{$outlet->nama_outlet}' dibuat dengan akun '{$user->username}'",
                 ['outlet_id' => $outlet->id],
                 $usahaId,
                 $outlet->id,
@@ -100,8 +94,7 @@ class OutletService
                 'outlet' => $outlet->load('usaha'),
                 'akun'   => [
                     'username' => $user->username,
-                    'password' => $plainPassword,
-                    'note'     => '⚠️ Simpan password ini! Tidak bisa ditampilkan lagi.',
+                    'note'     => 'Akun outlet berhasil dibuat.',
                 ],
             ];
         });

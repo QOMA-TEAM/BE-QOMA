@@ -27,6 +27,8 @@ class OutletController extends Controller
             'nama_outlet'  => 'required|string|max:100',
             'alamat'       => 'nullable|string',
             'email' => 'nullable|email',
+            'username'     => 'required|string|min:4|unique:users,username', 
+            'password'     => 'required|string|min:6',
         ]);
 
         try {
