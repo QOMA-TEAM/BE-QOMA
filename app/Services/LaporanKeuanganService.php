@@ -127,119 +127,87 @@ class LaporanKeuanganService
      */
     public function getLaporan(string $outletId, string $range = '7days'): array
     {
-        $query = LaporanKeuangan::where('outlet_id', $outletId)
-                                ->where('tipe_periode', 'daily')
-                                ->orderBy('periode');
-
-        switch ($range) {
-            case '1day':
-                $query->where('periode', now()->toDateString());
-                break;
-            case '7days':
-                $query->whereBetween('periode', [
-                    now()->subDays(6)->toDateString(),
-                    now()->toDateString(),
-                ]);
-                break;
-            case '30days':
-            default:
-                $query->whereBetween('periode', [
-                    now()->subDays(29)->toDateString(),
-                    now()->toDateString(),
-                ]);
-                break;
-        }
-
-        $data = $query->get();
-
-        // Summary total untuk card
-        $summary = [
-            'total_pendapatan'  => $data->sum('total_pendapatan'),
-            'total_pengeluaran' => $data->sum('total_pengeluaran'),
-            'total_kerugian'    => $data->sum('total_kerugian'),
-            'total_keuntungan'  => $data->sum('total_keuntungan'),
-            'status'            => $data->sum('total_keuntungan') >= 0 ? 'untung' : 'rugi',
-        ];
-
-        return [
-            'range'   => $range,
-            'summary' => $summary,
-            'detail'  => $data, // untuk grafik per hari
-        ];
-    }
-
-    /**
-     * Ambil laporan semua outlet milik 1 usaha (untuk dashboard owner).
-     */
-    public function getLaporanByUsaha(string $usahaId, string $range = '30days'): array
-    {
-        // Ambil semua outlet_id milik usaha ini
-        $outletIds = DB::table('outlet')
-            ->where('usaha_id', $usahaId)
-            ->pluck('id');
-
-        if ($outletIds->isEmpty()) {
-            return [
-                'total_pendapatan'  => 0,
-                'total_pengeluaran' => 0,
-                'total_kerugian'    => 0,
-                'total_keuntungan'  => 0,
-                'per_outlet'        => [],
-            ];
-        }
-
-        // Hitung range tanggal
         [$dari, $sampai] = match($range) {
             '1day'  => [now()->toDateString(), now()->toDateString()],
             '7days' => [now()->subDays(6)->toDateString(), now()->toDateString()],
             default => [now()->subDays(29)->toDateString(), now()->toDateString()],
         };
 
-        // Aggregate semua outlet
-        $global = LaporanKeuangan::whereIn('outlet_id', $outletIds)
-            ->where('tipe_periode', 'daily')
-            ->whereBetween('periode', [$dari, $sampai])
-            ->selectRaw('
-                SUM(total_pendapatan)  as total_pendapatan,
-                SUM(total_pengeluaran) as total_pengeluaran,
-                SUM(total_kerugian)    as total_kerugian,
-                SUM(total_keuntungan)  as total_keuntungan
-            ')
-            ->first();
+        $data = LaporanKeuangan::select('id', 'outlet_id', 'total_pendapatan', 'total_pengeluaran', 'total_kerugian', 'total_keuntungan', 'periode')
+                            ->where('outlet_id', $outletId)
+                            ->where('tipe_periode', 'daily')
+                            ->whereBetween('periode', [$dari, $sampai])
+                            ->orderBy('periode')
+                            ->get();
 
-        // Per outlet (untuk grafik dropdown)
-        $perOutlet = LaporanKeuangan::whereIn('outlet_id', $outletIds)
-            ->where('tipe_periode', 'daily')
-            ->whereBetween('periode', [$dari, $sampai])
-            ->with('outlet:id,nama_outlet')
-            ->orderBy('periode')
-            ->get()
-            ->groupBy('outlet_id')
-            ->map(fn($rows, $outletId) => [
-                'outlet_id'         => $outletId,
-                'nama_outlet'       => $rows->first()->outlet->nama_outlet ?? '-',
-                'total_pendapatan'  => $rows->sum('total_pendapatan'),
-                'total_pengeluaran' => $rows->sum('total_pengeluaran'),
-                'total_kerugian'    => $rows->sum('total_kerugian'),
-                'total_keuntungan'  => $rows->sum('total_keuntungan'),
-                'grafik'            => $rows->map(fn($r) => [
-                    'tanggal'          => $r->periode,
-                    'total_pendapatan' => $r->total_pendapatan,
-                    'total_keuntungan' => $r->total_keuntungan,
-                ]),
-            ])
-            ->values();
-
-        return [
-            'range'             => $range,
-            'dari'              => $dari,
-            'sampai'            => $sampai,
-            'total_pendapatan'  => (float) ($global->total_pendapatan  ?? 0),
-            'total_pengeluaran' => (float) ($global->total_pengeluaran ?? 0),
-            'total_kerugian'    => (float) ($global->total_kerugian    ?? 0),
-            'total_keuntungan'  => (float) ($global->total_keuntungan  ?? 0),
-            'status'            => ($global->total_keuntungan ?? 0) >= 0 ? 'untung' : 'rugi',
-            'per_outlet'        => $perOutlet,
+        $summary = [
+            'total_pendapatan'  => (float) $data->sum('total_pendapatan'),
+            'total_pengeluaran' => (float) $data->sum('total_pengeluaran'),
+            'total_kerugian'    => (float) $data->sum('total_kerugian'),
+            'total_keuntungan'  => (float) $data->sum('total_keuntungan'),
+            'status'            => $data->sum('total_keuntungan') >= 0 ? 'untung' : 'rugi',
         ];
+
+        return ['range' => $range, 'summary' => $summary, 'detail' => $data];
+    }
+
+    public function getLaporanByUsaha(string $usahaId, string $range = '30days'): array
+    {
+        [$dari, $sampai] = match($range) {
+            '1day'  => [now()->toDateString(), now()->toDateString()],
+            '7days' => [now()->subDays(6)->toDateString(), now()->toDateString()],
+            default => [now()->subDays(29)->toDateString(), now()->toDateString()],
+        };
+
+        // 1 query untuk ambil semua outlet_id
+        $outletIds = Outlet::where('usaha_id', $usahaId)->pluck('id');
+
+        if ($outletIds->isEmpty()) {
+            return [
+                'range' => $range, 'dari' => $dari, 'sampai' => $sampai,
+                'total_pendapatan' => 0, 'total_pengeluaran' => 0,
+                'total_kerugian' => 0, 'total_keuntungan' => 0,
+                'status' => 'untung', 'per_outlet' => [],
+            ];
+        }
+
+        // 1 query untuk semua laporan semua outlet
+        $semuaLaporan = LaporanKeuangan::select('id', 'outlet_id', 'total_pendapatan', 'total_pengeluaran', 'total_kerugian', 'total_keuntungan', 'periode')
+                                    ->whereIn('outlet_id', $outletIds)
+                                    ->where('tipe_periode', 'daily')
+                                    ->whereBetween('periode', [$dari, $sampai])
+                                    ->with('outlet:id,nama_outlet')
+                                    ->orderBy('periode')
+                                    ->get();
+
+        $global = [
+            'total_pendapatan'  => (float) $semuaLaporan->sum('total_pendapatan'),
+            'total_pengeluaran' => (float) $semuaLaporan->sum('total_pengeluaran'),
+            'total_kerugian'    => (float) $semuaLaporan->sum('total_kerugian'),
+            'total_keuntungan'  => (float) $semuaLaporan->sum('total_keuntungan'),
+        ];
+
+        // Group by outlet_id — tidak ada query tambahan
+        $perOutlet = $semuaLaporan->groupBy('outlet_id')->map(fn($rows) => [
+            'outlet_id'         => $rows->first()->outlet_id,
+            'nama_outlet'       => $rows->first()->outlet->nama_outlet ?? '-',
+            'total_pendapatan'  => (float) $rows->sum('total_pendapatan'),
+            'total_pengeluaran' => (float) $rows->sum('total_pengeluaran'),
+            'total_kerugian'    => (float) $rows->sum('total_kerugian'),
+            'total_keuntungan'  => (float) $rows->sum('total_keuntungan'),
+            'grafik'            => $rows->map(fn($r) => [
+                'tanggal'          => $r->periode,
+                'total_pendapatan' => (float) $r->total_pendapatan,
+                'total_keuntungan' => (float) $r->total_keuntungan,
+            ]),
+        ])->values();
+
+        return array_merge($global, [
+            'range'  => $range,
+            'dari'   => $dari,
+            'sampai' => $sampai,
+            'status' => $global['total_keuntungan'] >= 0 ? 'untung' : 'rugi',
+            'per_outlet' => $perOutlet,
+        ]);
     }
 }

@@ -5,13 +5,13 @@ namespace App\Http\Controllers\Api\Outlet;
 use App\Http\Controllers\Controller;
 use App\Models\{Kerugian, LaporanKeuangan, Pengeluaran, Pesanan};
 use App\Services\LaporanKeuanganService;
-use App\Traits\OutletAccess;
+use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class KeuanganOutletController extends Controller
 {
-    use OutletAccess;
+    use OutletAccess, HasPagination;
 
     public function __construct(private LaporanKeuanganService $service) {}
 
@@ -92,15 +92,20 @@ class KeuanganOutletController extends Controller
     /**
      * Ambil list transaksi detail (pendapatan + pengeluaran + kerugian)
      */
-    private function getListTransaksi(string $outletId, string $dari, string $sampai): array
-    {
-        // Pendapatan dari pesanan paid
-        $pendapatan = Pesanan::where('outlet_id', $outletId)
+    private function getListTransaksiPaginated(
+        string  $outletId,
+        string  $dari,
+        string  $sampai,
+        Request $request
+    ): array {
+        $perPage = $this->getPerPage($request);
+        $page    = (int) $request->get('page', 1);
+
+        $pendapatan = Pesanan::select('id', 'meja_id', 'nama_pelanggan', 'total_harga', 'updated_at')
+            ->where('outlet_id', $outletId)
             ->where('status', 'paid')
             ->whereBetween(DB::raw('DATE(updated_at)'), [$dari, $sampai])
             ->with('meja:id,nomor_meja')
-            ->select('id', 'meja_id', 'nama_pelanggan', 'total_harga', 'updated_at')
-            ->orderByDesc('updated_at')
             ->get()
             ->map(fn($p) => [
                 'tipe'       => 'pendapatan',
@@ -111,10 +116,9 @@ class KeuanganOutletController extends Controller
                 'waktu'      => $p->updated_at->format('H:i'),
             ]);
 
-        // Pengeluaran bahan baku
-        $pengeluaran = Pengeluaran::where('outlet_id', $outletId)
+        $pengeluaran = Pengeluaran::select('id', 'sumber', 'total', 'tanggal')
+            ->where('outlet_id', $outletId)
             ->whereBetween('tanggal', [$dari, $sampai])
-            ->orderByDesc('tanggal')
             ->get()
             ->map(fn($p) => [
                 'tipe'       => 'pengeluaran',
@@ -125,10 +129,9 @@ class KeuanganOutletController extends Controller
                 'waktu'      => '-',
             ]);
 
-        // Kerugian (dari stock opname + manual)
-        $kerugian = Kerugian::where('outlet_id', $outletId)
+        $kerugian = Kerugian::select('id', 'total_rugi', 'tanggal')
+            ->where('outlet_id', $outletId)
             ->whereBetween('tanggal', [$dari, $sampai])
-            ->orderByDesc('tanggal')
             ->get()
             ->map(fn($k) => [
                 'tipe'       => 'kerugian',
@@ -139,12 +142,23 @@ class KeuanganOutletController extends Controller
                 'waktu'      => '-',
             ]);
 
-        // Gabung dan sort berdasarkan tanggal terbaru
-        return collect($pendapatan)
+        $sorted = collect($pendapatan)
             ->concat($pengeluaran)
             ->concat($kerugian)
             ->sortByDesc('tanggal')
-            ->values()
-            ->toArray();
+            ->values();
+
+        $total = $sorted->count();
+        $items = $sorted->forPage($page, $perPage)->values();
+
+        return [
+            'data' => $items,
+            'meta' => [
+                'current_page' => $page,
+                'per_page'     => $perPage,
+                'total'        => $total,
+                'last_page'    => (int) ceil($total / $perPage),
+            ],
+        ];
     }
 }

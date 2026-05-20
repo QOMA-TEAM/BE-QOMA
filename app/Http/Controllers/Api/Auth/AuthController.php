@@ -1,35 +1,36 @@
 <?php
-
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Auth\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Tymon\JWTAuth\Exceptions\JWTException;
-use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\{JWTException, TokenExpiredException};
 use Tymon\JWTAuth\Facades\JWTAuth;
-use App\Http\Resources\Auth\UserResource;
 
 class AuthController extends Controller
 {
-    // POST /auth/login
+    // POST /auth/login — ganti username → email
     public function login(Request $request)
     {
         $request->validate([
-            'username' => 'required|string',
+            'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('username', $request->username)->first();
+        // Cari user berdasarkan email
+        $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Username atau password salah'], 401);
+            return response()->json([
+                'message' => 'Email atau password salah.',
+            ], 401);
         }
 
         if (!$user->is_active) {
             return response()->json([
-                'message' => 'Akun Anda belum aktif atau telah dinonaktifkan. Hubungi admin.',
+                'message' => 'Akun belum aktif atau telah dinonaktifkan. Hubungi admin.',
             ], 403);
         }
 
@@ -40,7 +41,7 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type'   => 'bearer',
             'expires_in'   => config('jwt.ttl') * 60,
-            'user' => new UserResource($user),
+            'user'         => new UserResource($user->load('role')),
         ]);
     }
 
@@ -48,7 +49,6 @@ class AuthController extends Controller
     public function logout()
     {
         JWTAuth::invalidate(JWTAuth::getToken());
-
         return response()->json(['message' => 'Logout berhasil']);
     }
 
@@ -57,7 +57,6 @@ class AuthController extends Controller
     {
         try {
             $newToken = JWTAuth::parseToken()->refresh();
-
             return response()->json([
                 'message'      => 'Token berhasil direfresh',
                 'access_token' => $newToken,
@@ -65,15 +64,9 @@ class AuthController extends Controller
                 'expires_in'   => config('jwt.ttl') * 60,
             ]);
         } catch (TokenExpiredException $e) {
-            return response()->json([
-                'message' => 'Refresh token sudah expired. Silakan login ulang.',
-                'code'    => 'TOKEN_EXPIRED',
-            ], 401);
+            return response()->json(['message' => 'Refresh token expired. Silakan login ulang.', 'code' => 'TOKEN_EXPIRED'], 401);
         } catch (JWTException $e) {
-            return response()->json([
-                'message' => 'Token tidak valid.',
-                'code'    => 'TOKEN_INVALID',
-            ], 401);
+            return response()->json(['message' => 'Token tidak valid.', 'code' => 'TOKEN_INVALID'], 401);
         }
     }
 
@@ -81,13 +74,6 @@ class AuthController extends Controller
     public function me()
     {
         $user = auth()->user()->load('role');
-
-        return response()->json([
-            'id'           => $user->id,
-            'username'     => $user->username,
-            'nama_lengkap' => $user->nama_lengkap,
-            'email'        => $user->email,
-            'role'         => $user->role->name,
-        ]);
+        return response()->json(new UserResource($user));
     }
 }

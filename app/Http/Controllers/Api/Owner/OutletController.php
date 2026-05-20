@@ -24,12 +24,12 @@ class OutletController extends Controller
     {
         $this->gate($usahaId);
         $request->validate([
-            'nama_outlet'  => 'required|string|max:100',
-            'alamat'       => 'nullable|string',
-            'email' => 'nullable|email',
-            'username'     => 'required|string|min:4|unique:users,username', 
-            'password'     => 'required|string|min:6',
-        ]);
+        'nama_outlet'  => 'required|string|max:100',
+        'alamat'       => 'nullable|string',
+        'email_outlet' => 'required|email|unique:users,email', 
+        'username'     => 'required|string|min:4|unique:users,username',
+        'password'     => 'required|string|min:6',
+    ]);
 
         try {
             $result = $this->service->create($request->all(), $usahaId);

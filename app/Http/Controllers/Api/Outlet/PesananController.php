@@ -34,9 +34,13 @@ class PesananController extends Controller
     }
 
     // GET /outlet/pesanan/{id}
-    public function show(string $id)
-    {   
+   public function show(string $id)
+    {
         $outletId = $this->getOutletId();
+
+        // ← $pesanan tidak pernah didefinisikan, fix:
+        $pesanan = $this->service->getDetail($id, $outletId);
+
         return response()->json([
             'message' => 'Detail pesanan',
             'data'    => new PesananResource($pesanan),

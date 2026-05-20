@@ -49,21 +49,21 @@ class MenuController extends Controller
         $usahaId = $this->getUsahaId();
 
         $request->validate([
-            'nama'                       => 'required|string|max:150',
-            'kategori_id'                => 'required|exists:kategori_menu,id',
-            'harga_default'              => 'required|numeric|min:1',
-            'keterangan'                 => 'nullable|string|max:500',
-            'is_active'                  => 'nullable|boolean',
-            'gambar'                     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'bahan_baku'                 => 'nullable|array',
+            'nama'                         => 'required|string|max:150',
+            'kategori_id'                  => 'required|exists:kategori_menu,id',
+            'harga_default'                => 'required|numeric|min:1',
+            'keterangan'                   => 'nullable|string|max:500',
+            'is_active'                    => 'nullable|boolean',
+            'gambar'                       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'bahan_baku'                   => 'nullable|array',
             'bahan_baku.*.bahan_master_id' => 'required|exists:bahan_master,id',
             'bahan_baku.*.jumlah_pakai'    => 'required|numeric|min:0.01',
         ]);
 
         // Validasi kategori milik usaha ini
         $kategoriValid = KategoriMenu::where('id', $request->kategori_id)
-                                     ->where('usaha_id', $usahaId)
-                                     ->exists();
+                                    ->where('usaha_id', $usahaId)
+                                    ->exists();
 
         if (!$kategoriValid) {
             return response()->json([
@@ -73,16 +73,28 @@ class MenuController extends Controller
 
         // Validasi bahan baku milik usaha ini
         if ($request->bahan_baku) {
-            $bahanIds       = collect($request->bahan_baku)->pluck('bahan_master_id');
+            $bahanIds        = collect($request->bahan_baku)->pluck('bahan_master_id');
             $validBahanCount = BahanMaster::whereIn('id', $bahanIds)
-                                          ->where('usaha_id', $usahaId)
-                                          ->count();
+                                        ->where('usaha_id', $usahaId)
+                                        ->count();
 
             if ($validBahanCount !== $bahanIds->count()) {
                 return response()->json([
                     'message' => 'Satu atau lebih bahan baku tidak valid atau bukan milik usaha Anda.',
                 ], 422);
             }
+        }
+
+        // ← FIX: definisikan $duplikat sebelum dipakai
+        $duplikat = Menu::where('usaha_id', $usahaId)
+                        ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
+                        ->exists();
+
+        if ($duplikat) {
+            return response()->json([
+                'message' => "Menu '{$request->nama}' sudah ada di usaha ini.",
+                'code'    => 'DUPLICATE',
+            ], 422);
         }
 
         return DB::transaction(function () use ($request, $usahaId) {
@@ -169,6 +181,21 @@ class MenuController extends Controller
             'bahan_baku.*.bahan_master_id' => 'required|exists:bahan_master,id',
             'bahan_baku.*.jumlah_pakai'    => 'required|numeric|min:0.01',
         ]);
+        
+        // Sebelum update, cek duplikat jika nama diubah
+        if ($request->filled('nama') && strtolower($request->nama) !== strtolower($menu->nama)) {
+            $duplikat = Menu::where('usaha_id', $usahaId)
+                            ->where('id', '!=', $id)
+                            ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
+                            ->exists();
+
+            if ($duplikat) {
+                return response()->json([
+                    'message' => "Menu '{$request->nama}' sudah ada.",
+                    'code'    => 'DUPLICATE',
+                ], 422);
+            }
+        }
 
         return DB::transaction(function () use ($request, $menu, $usahaId) {
 

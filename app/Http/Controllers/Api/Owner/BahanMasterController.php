@@ -16,6 +16,8 @@ class BahanMasterController extends Controller
     
     use HasPagination, OwnerAccess;
 
+    public function __construct(private ImageService $imageService) {}
+
     /**
      * Ambil daftar bahan baku milik owner
      */
@@ -44,19 +46,19 @@ class BahanMasterController extends Controller
 
         $request->validate([
             'nama'          => 'required|string|max:100',
-            'satuan'        => 'required|string|max:20',  // kg, liter, pcs, dll
+            'satuan'        => 'required|in:kg,gram,liter,pcs,porsi,lusin,botol,sachet',
             'harga_default' => 'required|numeric|min:0',
             'gambar'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        // Cek duplikat nama dalam usaha yang sama
+        // Cek duplikat case-insensitive per usaha
         $duplikat = BahanMaster::where('usaha_id', $usahaId)
-                               ->where('nama', $request->nama)
-                               ->exists();
+                            ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
+                            ->exists();
 
         if ($duplikat) {
             return response()->json([
-                'message' => "Bahan baku '{$request->nama}' sudah ada.",
+                'message' => "Bahan baku '{$request->nama}' sudah ada di usaha ini.",
                 'code'    => 'DUPLICATE',
             ], 422);
         }
@@ -106,10 +108,25 @@ class BahanMasterController extends Controller
 
         $request->validate([
             'nama'          => 'sometimes|string|max:100',
-            'satuan'        => 'sometimes|string|max:20',
+            'satuan'        => 'sometimes|in:kg,gram,liter,pcs,porsi,lusin,botol,sachet',
             'harga_default' => 'sometimes|numeric|min:0',
             'gambar'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        // Cek duplikat nama jika nama diubah
+        if ($request->filled('nama') && strtolower($request->nama) !== strtolower($bahan->nama)) {
+            $duplikat = BahanMaster::where('usaha_id', $usahaId)
+                                ->where('id', '!=', $id)
+                                ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
+                                ->exists();
+
+            if ($duplikat) {
+                return response()->json([
+                    'message' => "Bahan baku '{$request->nama}' sudah ada.",
+                    'code'    => 'DUPLICATE',
+                ], 422);
+            }
+        }
 
         $gambarPath = $request->hasFile('gambar')
             ? $this->imageService->replace($request->file('gambar'), $bahan->gambar, "bahan-master/{$usahaId}")
@@ -165,7 +182,5 @@ class BahanMasterController extends Controller
 
         return response()->json(['message' => 'Bahan baku berhasil dihapus']);
     }
-
-    public function __construct(private ImageService $imageService) {}
     
 }

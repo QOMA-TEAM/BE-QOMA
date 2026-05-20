@@ -18,10 +18,10 @@ class BahanOutletService
      */
     public function getList(string $outletId, array $filters = [])
     {
-        $query = BahanOutlet::where('outlet_id', $outletId)
+        $query = BahanOutlet::select('id', 'outlet_id', 'bahan_master_id', 'stok', 'stok_minimum', 'tanggal_masuk', 'tanggal_kadaluarsa')
+                            ->where('outlet_id', $outletId)
                             ->with('bahanMaster:id,nama,satuan,harga_default,gambar');
 
-        // Filter
         if (!empty($filters['search'])) {
             $query->whereHas('bahanMaster', fn($q) =>
                 $q->where('nama', 'like', "%{$filters['search']}%")
@@ -29,26 +29,21 @@ class BahanOutletService
         }
 
         if (!empty($filters['menipis'])) {
-            // Hanya tampilkan yang stok <= stok_minimum
             $query->whereRaw('stok <= stok_minimum');
         }
 
         if (!empty($filters['mendekati_expired'])) {
             $query->whereNotNull('tanggal_kadaluarsa')
-                  ->whereDate('tanggal_kadaluarsa', '<=', now()->addDays(3))
-                  ->whereDate('tanggal_kadaluarsa', '>=', now());
+                ->whereDate('tanggal_kadaluarsa', '<=', now()->addDays(3))
+                ->whereDate('tanggal_kadaluarsa', '>=', now());
         }
 
-        // Sorting
-        $sortBy  = $filters['sort_by']  ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
+        $sortBy  = in_array($filters['sort_by'] ?? '', ['stok', 'tanggal_kadaluarsa', 'tanggal_masuk', 'created_at'])
+                ? $filters['sort_by']
+                : 'created_at';
+        $sortDir = ($filters['sort_dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
-        $allowedSort = ['stok', 'tanggal_kadaluarsa', 'tanggal_masuk', 'created_at'];
-        if (in_array($sortBy, $allowedSort)) {
-            $query->orderBy($sortBy, $sortDir);
-        }
-
-        return $query->paginate($filters['per_page'] ?? 15);
+        return $query->orderBy($sortBy, $sortDir)->paginate($filters['per_page'] ?? 15);
     }
 
     /**
@@ -220,57 +215,60 @@ class BahanOutletService
      */
     public function getAlerts(string $outletId): array
     {
-        // Stok menipis (stok <= stok_minimum)
-        $stokMenipis = BahanOutlet::where('outlet_id', $outletId)
-            ->whereRaw('stok <= stok_minimum')
-            ->with('bahanMaster:id,nama,satuan')
-            ->get()
-            ->map(fn($b) => [
-                'tipe'         => 'stok_menipis',
-                'bahan'        => $b->bahanMaster->nama,
-                'satuan'       => $b->bahanMaster->satuan,
-                'stok_saat_ini'=> (float) $b->stok,
-                'stok_minimum' => (float) $b->stok_minimum,
-                'pesan'        => "Stok {$b->bahanMaster->nama} menipis! Sisa {$b->stok} {$b->bahanMaster->satuan}",
-            ]);
+        // Satu query untuk semua alert, bukan 3 query terpisah
+        $semuaBahan = BahanOutlet::select('id', 'outlet_id', 'bahan_master_id', 'stok', 'stok_minimum', 'tanggal_kadaluarsa')
+                                ->where('outlet_id', $outletId)
+                                ->with('bahanMaster:id,nama,satuan')
+                                ->get();
 
-        // Mendekati expired (dalam 3 hari ke depan)
-        $mendekatiExpired = BahanOutlet::where('outlet_id', $outletId)
-            ->whereNotNull('tanggal_kadaluarsa')
-            ->whereDate('tanggal_kadaluarsa', '<=', now()->addDays(3))
-            ->whereDate('tanggal_kadaluarsa', '>=', now())
-            ->with('bahanMaster:id,nama,satuan')
-            ->get()
-            ->map(fn($b) => [
-                'tipe'               => 'mendekati_expired',
-                'bahan'              => $b->bahanMaster->nama,
-                'satuan'             => $b->bahanMaster->satuan,
-                'stok_saat_ini'      => (float) $b->stok,
-                'tanggal_kadaluarsa' => $b->tanggal_kadaluarsa->format('Y-m-d'),
-                'sisa_hari'          => (int) now()->diffInDays($b->tanggal_kadaluarsa),
-                'pesan'              => "Stok {$b->bahanMaster->nama} akan expired " . now()->diffInDays($b->tanggal_kadaluarsa) . " hari lagi!",
-            ]);
+        $stokMenipis     = collect();
+        $mendekatiExpired = collect();
+        $sudahExpired    = collect();
 
-        // Sudah expired
-        $sudahExpired = BahanOutlet::where('outlet_id', $outletId)
-            ->whereNotNull('tanggal_kadaluarsa')
-            ->whereDate('tanggal_kadaluarsa', '<', now())
-            ->where('stok', '>', 0)
-            ->with('bahanMaster:id,nama,satuan')
-            ->get()
-            ->map(fn($b) => [
-                'tipe'               => 'sudah_expired',
-                'bahan'              => $b->bahanMaster->nama,
-                'stok_saat_ini'      => (float) $b->stok,
-                'tanggal_kadaluarsa' => $b->tanggal_kadaluarsa->format('Y-m-d'),
-                'pesan'              => "⚠️ {$b->bahanMaster->nama} sudah EXPIRED sejak {$b->tanggal_kadaluarsa->format('d M Y')}!",
-            ]);
+        foreach ($semuaBahan as $b) {
+            // Cek stok menipis
+            if ($b->stok <= $b->stok_minimum) {
+                $stokMenipis->push([
+                    'tipe'          => 'stok_menipis',
+                    'bahan'         => $b->bahanMaster->nama,
+                    'satuan'        => $b->bahanMaster->satuan,
+                    'stok_saat_ini' => (float) $b->stok,
+                    'stok_minimum'  => (float) $b->stok_minimum,
+                    'pesan'         => "Stok {$b->bahanMaster->nama} menipis! Sisa {$b->stok} {$b->bahanMaster->satuan}",
+                ]);
+            }
+
+            // Cek expired
+            if ($b->tanggal_kadaluarsa) {
+                $tgl = \Carbon\Carbon::parse($b->tanggal_kadaluarsa);
+
+                if ($tgl->isPast() && $b->stok > 0) {
+                    $sudahExpired->push([
+                        'tipe'               => 'sudah_expired',
+                        'bahan'              => $b->bahanMaster->nama,
+                        'stok_saat_ini'      => (float) $b->stok,
+                        'tanggal_kadaluarsa' => $tgl->format('Y-m-d'),
+                        'pesan'              => "⚠️ {$b->bahanMaster->nama} sudah EXPIRED sejak {$tgl->format('d M Y')}!",
+                    ]);
+                } elseif ($tgl->isFuture() && $tgl->diffInDays(now()) <= 3) {
+                    $mendekatiExpired->push([
+                        'tipe'               => 'mendekati_expired',
+                        'bahan'              => $b->bahanMaster->nama,
+                        'satuan'             => $b->bahanMaster->satuan,
+                        'stok_saat_ini'      => (float) $b->stok,
+                        'tanggal_kadaluarsa' => $tgl->format('Y-m-d'),
+                        'sisa_hari'          => (int) now()->diffInDays($tgl),
+                        'pesan'              => "Stok {$b->bahanMaster->nama} expired dalam " . now()->diffInDays($tgl) . " hari!",
+                    ]);
+                }
+            }
+        }
 
         return [
-            'total_alert'      => $stokMenipis->count() + $mendekatiExpired->count() + $sudahExpired->count(),
-            'stok_menipis'     => $stokMenipis,
-            'mendekati_expired'=> $mendekatiExpired,
-            'sudah_expired'    => $sudahExpired,
+            'total_alert'       => $stokMenipis->count() + $mendekatiExpired->count() + $sudahExpired->count(),
+            'stok_menipis'      => $stokMenipis->values(),
+            'mendekati_expired' => $mendekatiExpired->values(),
+            'sudah_expired'     => $sudahExpired->values(),
         ];
     }
 }

@@ -4,23 +4,28 @@ namespace App\Http\Controllers\Api\Outlet;
 use App\Http\Controllers\Controller;
 use App\Models\Meja;
 use App\Services\Outlet\MejaService;
-use App\Traits\OutletAccess;
+use App\Traits\{HasPagination, OutletAccess}; // ← tambah HasPagination
 use Illuminate\Http\Request;
 
 class MejaController extends Controller
 {
-    use OutletAccess;
+    use HasPagination, OutletAccess; // ← tambah HasPagination
 
     public function __construct(private MejaService $service) {}
 
     // GET /outlet/meja
-    public function index()
+    public function index(Request $request) // ← tambah Request
     {
         $outletId = $this->getOutletId();
-        return response()->json([
-            'message' => 'Daftar meja',
-            'data'    => $this->service->getByOutlet($outletId),
-        ]);
+
+        $mejas = Meja::select('id', 'outlet_id', 'nomor_meja', 'qr_code')
+                     ->where('outlet_id', $outletId)
+                     ->orderBy('nomor_meja')
+                     ->paginate($this->getPerPage($request));
+
+        return response()->json(
+            $this->paginateResponse($mejas, 'Daftar meja')
+        );
     }
 
     // POST /outlet/meja

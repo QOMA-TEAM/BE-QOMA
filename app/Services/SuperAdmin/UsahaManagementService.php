@@ -9,14 +9,22 @@ class UsahaManagementService
 {
     public function listUsaha(array $filters = [], int $perPage = 15)
     {
-        $query = Usaha::with(['owner:id,username,nama_lengkap,email,is_active', 'subscription.plan'])
-                      ->withCount('outlets');
+        $query = Usaha::select('id', 'nama_usaha', 'email', 'alamat', 'status', 'owner_id', 'approved_at', 'created_at')
+                    ->with([
+                        'owner:id,username,nama_lengkap,email,is_active',
+                        'subscription:id,usaha_id,plan_id,status,end_date',
+                        'subscription.plan:id,nama_plan,harga',
+                    ])
+                    ->withCount('outlets');
 
-        if (!empty($filters['status'])) $query->where('status', $filters['status']);
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
         if (!empty($filters['search'])) {
             $query->where(fn($q) =>
                 $q->where('nama_usaha', 'like', "%{$filters['search']}%")
-                  ->orWhere('email', 'like', "%{$filters['search']}%")
+                ->orWhere('email', 'like', "%{$filters['search']}%")
             );
         }
 
@@ -25,12 +33,16 @@ class UsahaManagementService
 
     public function detailUsaha(string $id): Usaha
     {
-        return Usaha::with([
-            'owner:id,username,nama_lengkap,email,is_active',
-            'outlets:id,usaha_id,nama_outlet,alamat,status_buka',
-            'subscription.plan',
-            'rejections.rejectedBy:id,username',
-        ])->findOrFail($id);
+        return Usaha::select('id', 'nama_usaha', 'email', 'alamat', 'status', 'owner_id', 'catatan_admin', 'approved_at', 'rejected_at', 'created_at')
+                    ->with([
+                        'owner:id,username,nama_lengkap,email,is_active',
+                        'outlets:id,usaha_id,nama_outlet,alamat,status_buka',
+                        'subscription:id,usaha_id,plan_id,status,start_date,end_date',
+                        'subscription.plan:id,nama_plan,harga,durasi_hari',
+                        'rejections:id,usaha_id,rejected_by,alasan,created_at',
+                        'rejections.rejectedBy:id,username',
+                    ])
+                    ->findOrFail($id);
     }
 
     public function approve(Usaha $usaha): Usaha
@@ -120,17 +132,18 @@ class UsahaManagementService
 
     public function listOwner(array $filters = [], int $perPage = 15)
     {
-        $query = User::whereHas('role', fn($q) => $q->where('name', 'owner'))
-                     ->with(['usaha:id,owner_id,nama_usaha,status'])
-                     ->select('id', 'username', 'nama_lengkap', 'email', 'is_active', 'usaha_id', 'created_at');
+        $query = User::select('id', 'username', 'nama_lengkap', 'email', 'is_active', 'usaha_id', 'created_at')
+                    ->whereHas('role', fn($q) => $q->where('name', 'owner'))
+                    ->with(['usaha:id,owner_id,nama_usaha,status']);
 
         if (!empty($filters['search'])) {
             $query->where(fn($q) =>
                 $q->where('username', 'like', "%{$filters['search']}%")
-                  ->orWhere('email', 'like', "%{$filters['search']}%")
-                  ->orWhere('nama_lengkap', 'like', "%{$filters['search']}%")
+                ->orWhere('email', 'like', "%{$filters['search']}%")
+                ->orWhere('nama_lengkap', 'like', "%{$filters['search']}%")
             );
         }
+
         if (isset($filters['is_active'])) {
             $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }

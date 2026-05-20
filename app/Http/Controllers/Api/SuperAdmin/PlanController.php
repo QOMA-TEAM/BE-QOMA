@@ -12,12 +12,14 @@ class PlanController extends Controller
     use HasPagination;
     public function __construct(private UsahaManagementService $service) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json([
-            'message' => 'Daftar plan',
-            'data'    => PlanResource::collection($this->service->listPlans()),
-        ]);
+        $plans = Plan::withCount('subscriptions')
+                    ->paginate($this->getPerPage($request));
+
+        return response()->json(
+            $this->paginateResponse($plans, 'Daftar plan')
+        );
     }
 
     public function store(Request $request)

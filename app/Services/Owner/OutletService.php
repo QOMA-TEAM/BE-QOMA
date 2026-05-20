@@ -45,10 +45,11 @@ class OutletService
 
     public function getByUsaha(string $usahaId, int $perPage = 15)
     {
-        return Outlet::where('usaha_id', $usahaId)
-                     ->withCount('mejas')
-                     ->with(['users' => fn($q) => $q->select('id', 'outlet_id', 'username', 'is_active')])
-                     ->paginate($perPage);
+        return Outlet::select('id', 'usaha_id', 'nama_outlet', 'alamat', 'status_buka', 'email', 'created_at')
+                    ->where('usaha_id', $usahaId)
+                    ->withCount('mejas')
+                    ->with(['users:id,outlet_id,username,email,is_active'])
+                    ->paginate($perPage);
     }
 
     public function create(array $data, string $usahaId): array
@@ -56,28 +57,27 @@ class OutletService
         return DB::transaction(function () use ($data, $usahaId) {
             $this->validateOutletLimit($usahaId);
 
-            // Buat outlet
             $outlet = Outlet::create([
                 'id'          => Str::uuid(),
                 'usaha_id'    => $usahaId,
                 'nama_outlet' => $data['nama_outlet'],
                 'alamat'      => $data['alamat'] ?? null,
                 'status_buka' => true,
-                'email'       => $data['email_outlet'] ?? null,
+                'email'       => $data['email_outlet'], 
             ]);
 
-            // Akun outlet — pakai username & password dari input owner
             $role = Role::where('name', 'outlet')->first();
 
             $user = User::create([
-                'id'        => Str::uuid(),
-                'role_id'   => $role->id,
-                'usaha_id'  => $usahaId,
-                'outlet_id' => $outlet->id,
-                'username'  => $data['username'],                  
-                'password'  => Hash::make($data['password']),      
-                'email'     => $data['email_outlet'] ?? null,
-                'is_active' => true,
+                'id'           => Str::uuid(),
+                'role_id'      => $role->id,
+                'usaha_id'     => $usahaId,
+                'outlet_id'    => $outlet->id,
+                'username'     => $data['username'],
+                'nama_lengkap' => $data['nama_outlet'],
+                'email'        => $data['email_outlet'], 
+                'password'     => Hash::make($data['password']),
+                'is_active'    => true,
             ]);
 
             $this->syncMenuOutlet($outlet->id, $usahaId);
@@ -94,6 +94,7 @@ class OutletService
                 'outlet' => $outlet->load('usaha'),
                 'akun'   => [
                     'username' => $user->username,
+                    'email'    => $user->email,
                     'note'     => 'Akun outlet berhasil dibuat.',
                 ],
             ];

@@ -9,14 +9,14 @@ use App\Models\Outlet;
 use App\Models\Pengeluaran;
 use App\Models\Pesanan;
 use App\Services\LaporanKeuanganService;
-use App\Traits\HasPagination;
+use App\Traits\HasPagination; 
 use App\Traits\OwnerAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class KeuanganController extends Controller
 {
-    use OwnerAccess;
+    use OwnerAccess, HasPagination;
 
     /**
      * GET /owner/keuangan
@@ -76,6 +76,8 @@ class KeuanganController extends Controller
         $range    = $request->get('range', '7days');
         $outletId = $request->get('outlet_id');
         $tipe     = $request->get('tipe', 'semua');
+        $perPage  = $request->get('per_page', 15);
+        $page     = $request->get('page', 1);
 
         [$dari, $sampai] = $this->getRange($range);
 
@@ -85,9 +87,6 @@ class KeuanganController extends Controller
 
         $result = collect();
 
-        // =========================
-        // PENDAPATAN
-        // =========================
         if (in_array($tipe, ['semua', 'pendapatan'])) {
             $pendapatan = Pesanan::whereIn('outlet_id', $outletIds)
                 ->where('status', 'paid')
@@ -102,13 +101,9 @@ class KeuanganController extends Controller
                     'nominal'    => (float) $p->total_harga,
                     'tanggal'    => $p->updated_at->toDateString(),
                 ]);
-
             $result = $result->merge($pendapatan);
         }
 
-        // =========================
-        // PENGELUARAN
-        // =========================
         if (in_array($tipe, ['semua', 'pengeluaran'])) {
             $pengeluaran = Pengeluaran::whereIn('outlet_id', $outletIds)
                 ->whereBetween('tanggal', [$dari, $sampai])
@@ -122,13 +117,9 @@ class KeuanganController extends Controller
                     'nominal'    => (float) $p->total,
                     'tanggal'    => $p->tanggal,
                 ]);
-
             $result = $result->merge($pengeluaran);
         }
 
-        // =========================
-        // KERUGIAN
-        // =========================
         if (in_array($tipe, ['semua', 'kerugian'])) {
             $kerugian = Kerugian::whereIn('outlet_id', $outletIds)
                 ->whereBetween('tanggal', [$dari, $sampai])
@@ -142,17 +133,26 @@ class KeuanganController extends Controller
                     'nominal'    => (float) $p->total_rugi,
                     'tanggal'    => $p->tanggal,
                 ]);
-
             $result = $result->merge($kerugian);
         }
 
-        // SORT BY TANGGAL
-        $result = $result->sortByDesc('tanggal')->values();
+        // Sort & manual paginate
+        $sorted = $result->sortByDesc('tanggal')->values();
+        $total  = $sorted->count();
+        $items  = $sorted->forPage($page, $perPage)->values();
 
         return response()->json([
             'message' => 'List transaksi keuangan',
             'filter'  => compact('range', 'dari', 'sampai', 'tipe'),
-            'data'    => $result
+            'data'    => $items,
+            'meta'    => [
+                'current_page' => (int) $page,
+                'per_page'     => (int) $perPage,
+                'total'        => $total,
+                'last_page'    => (int) ceil($total / $perPage),
+                'from'         => $total > 0 ? ($page - 1) * $perPage + 1 : null,
+                'to'           => min($page * $perPage, $total),
+            ],
         ]);
     }
 

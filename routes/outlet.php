@@ -43,7 +43,7 @@ Route::middleware('role:outlet')->group(function () {
 
     // Menu Outlet (edit harga)
     Route::get  ('menu',                    [MenuOutletController::class, 'index']);
-    Route::patch('menu/{menu_id}/harga',    [MenuOutletController::class, 'updateHarga']);
+    Route::patch('menu/{menu_id}/availability', [MenuOutletController::class, 'updateAvailability']);
 
     Route::get('keuangan', [KeuanganOutletController::class, 'index']);
 
@@ -53,7 +53,7 @@ Route::middleware('role:outlet')->group(function () {
     
     // Approval harga menu
     Route::get ('approval-harga',      [ApprovalHargaController::class, 'index']);
-    Route::post('approval-harga',      [ApprovalHargaController::class, 'store']);
+    Route::post ('approval-harga',     [ApprovalHargaController::class, 'store']);
 
     // Activity Log
     Route::get('activity-log', [ActivityLogController::class, 'index']);

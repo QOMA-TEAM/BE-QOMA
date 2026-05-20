@@ -2,7 +2,7 @@
 namespace App\Services\Outlet;
 
 use App\Events\{PesananDiupdate, PesananExpired};
-use App\Models\{BahanOutlet, Meja, Menu, MenuOutlet, Pembayaran, Pesanan, PesananDetail, StockMovement};
+use App\Models\{BahanOutlet, Menu, MenuOutlet, Pembayaran, Pesanan, PesananDetail, StockMovement};
 use App\Services\{ActivityLogService, LaporanKeuanganService};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -19,18 +19,21 @@ class PesananService
      */
     public function getList(string $outletId, array $filters = [])
     {
-        // Auto expire dulu sebelum return list
         $this->autoExpirePesanan($outletId);
 
-        $query = Pesanan::where('outlet_id', $outletId)
-                        ->with(['meja:id,nomor_meja', 'details.menu:id,nama'])
+        $query = Pesanan::select('id', 'outlet_id', 'meja_id', 'nama_pelanggan', 'no_telp', 'total_harga', 'status', 'tipe_pesanan', 'expired_at', 'created_at')
+                        ->where('outlet_id', $outletId)
+                        ->with([
+                            'meja:id,nomor_meja',
+                            'details:id,pesanan_id,menu_id,qty,harga',
+                            'details.menu:id,nama',
+                        ])
                         ->latest();
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        // Default: jangan tampilkan yang expired di list kasir
         if (empty($filters['status'])) {
             $query->whereNotIn('status', ['expired']);
         }
@@ -38,22 +41,21 @@ class PesananService
         return $query->paginate($filters['per_page'] ?? 15);
     }
 
-    /**
-     * Detail 1 pesanan — cek expired dulu
-     */
     public function getDetail(string $pesananId, string $outletId): Pesanan
     {
-        $pesanan = Pesanan::where('id', $pesananId)
-                          ->where('outlet_id', $outletId)
-                          ->with([
-                              'meja:id,nomor_meja',
-                              'details.menu:id,nama,gambar',
-                              'details.addons.addon:id,nama,harga',
-                              'pembayaran',
-                          ])
-                          ->firstOrFail();
+        $pesanan = Pesanan::select('id', 'outlet_id', 'meja_id', 'nama_pelanggan', 'no_telp', 'total_harga', 'status', 'tipe_pesanan', 'expired_at', 'created_at')
+                        ->where('id', $pesananId)
+                        ->where('outlet_id', $outletId)
+                        ->with([
+                            'meja:id,nomor_meja',
+                            'details:id,pesanan_id,menu_id,qty,harga',
+                            'details.menu:id,nama,gambar',
+                            'details.addons:id,pesanan_detail_id,addon_id,qty',
+                            'details.addons.addon:id,nama,harga',
+                            'pembayaran:id,pesanan_id,metode,jumlah_bayar,status,psid_at',
+                        ])
+                        ->firstOrFail();
 
-        // Cek dan proses expired saat detail diakses
         if ($pesanan->isExpired()) {
             $this->prosesExpired($pesanan);
             $pesanan->refresh();
