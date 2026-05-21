@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\{BahanMaster, LaporanKeuangan, StockOpname, Outlet};
+use App\Models\{ LaporanKeuangan, Outlet};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
