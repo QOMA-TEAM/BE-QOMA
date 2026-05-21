@@ -327,16 +327,16 @@ class UserSeeder extends Seeder
         $this->command->info('');
         $this->command->info('✅ UserSeeder selesai!');
         $this->command->table(
-        ['Role', 'Username', 'Email', 'Password', 'Usaha', 'Plan'],
-        [
-            ['super_admin', 'superadmin',    'superadmin@demo.com',  'password123', '-',               '-'],
-            ['owner',       'owner1',        'owner@demo.com',       'password123', 'Warung Barokah',  'Pro'],
-            ['owner',       'owner2',        'restositi@demo.com',   'password123', 'Resto Siti Jaya', 'Free'],
-            ['outlet',      'outlet_pusat',  'outletpusat@demo.com', 'password123', 'Warung Barokah',  '-'],
-            ['outlet',      'outlet_cabang', 'outletcabang@demo.com','password123', 'Warung Barokah',  '-'],
-            ['outlet',      'outlet_siti',   'outletsiti@demo.com',  'password123', 'Resto Siti Jaya', '-'],
-            ['owner',       'owner_pending', 'ownerpending@demo.com','password123', 'Kedai Baru',      'pending'],
-        ]
-    );
+            ['Role', 'Username', 'Email', 'Password', 'Usaha', 'Plan'],
+            [
+                ['super_admin', 'superadmin',    'superadmin@demo.com',  'password123', '-',               '-'],
+                ['owner',       'owner1',        'owner@demo.com',       'password123', 'Warung Barokah',  'Pro'],
+                ['owner',       'owner2',        'restositi@demo.com',   'password123', 'Resto Siti Jaya', 'Free'],
+                ['outlet',      'outlet_pusat',  'outletpusat@demo.com', 'password123', 'Warung Barokah',  '-'],
+                ['outlet',      'outlet_cabang', 'outletcabang@demo.com','password123', 'Warung Barokah',  '-'],
+                ['outlet',      'outlet_siti',   'outletsiti@demo.com',  'password123', 'Resto Siti Jaya', '-'],
+                ['owner',       'owner_pending', 'ownerpending@demo.com','password123', 'Kedai Baru',      'pending'],
+            ]
+        );
     }
 }
