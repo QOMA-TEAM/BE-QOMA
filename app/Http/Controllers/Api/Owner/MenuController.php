@@ -35,7 +35,7 @@ class MenuController extends Controller
         }
 
         if ($request->search) {
-            $query->where('nama', 'like', "%{$request->search}%");
+            $query->where('nama', 'ilike', "%{$request->search}%");
         }
 
         $menus = $query->orderBy('nama')->paginate($this->getPerPage($request));

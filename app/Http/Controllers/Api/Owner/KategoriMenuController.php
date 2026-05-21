@@ -17,10 +17,13 @@ class KategoriMenuController extends Controller
     {
         $usahaId = $this->getUsahaId();
 
-        $kategori = KategoriMenu::where('usaha_id', $usahaId)
-                                ->withCount('menus')
-                                ->orderBy('nama')
-                                ->paginate($this->getPerPage($request));
+        $query = KategoriMenu::where('usaha_id', $usahaId)->withCount('menus');
+
+        if ($request->search) {
+            $query->where('nama', 'ilike', "%{$request->search}%");
+        }
+
+        $kategori = $query->orderBy('nama')->paginate($this->getPerPage($request));
 
         return response()->json($this->paginateResponse($kategori, 'Daftar kategori'));
     }

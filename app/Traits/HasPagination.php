@@ -10,7 +10,7 @@ trait HasPagination
      * Ambil nilai perPage dari request.
      * Default 15, maksimal 100 — supaya tidak ada yang minta perPage=999999
      */
-    protected function getPerPage(Request $request, int $default = 15): int
+    protected function getPerPage(Request $request, int $default = 10): int
     {
         $perPage = (int) $request->get('per_page', $default);
         return min(max($perPage, 1), 100);
