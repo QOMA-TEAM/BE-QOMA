@@ -25,10 +25,12 @@ class SubscriptionController extends Controller
         // Format untuk list view
         $formatted = $subs->through(fn($sub) => [
             'id'                => $sub->id,
+            'usaha_id'           => $sub->usaha_id,
             'nama_perusahaan'   => $sub->usaha->nama_usaha ?? '-',
             'nama_owner'        => $sub->usaha->owner->nama_lengkap ?? '-',
             'jenis_subscription'=> $sub->plan->nama_plan ?? '-',
             'start_subscription'=> $sub->start_date,
+            'end_date'           => $sub->end_date,
             'status'            => $sub->status,
             'harga'             => $sub->plan->harga ?? 0,
         ]);
