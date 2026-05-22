@@ -20,7 +20,7 @@ class ActivityLogController extends Controller
         'unsuspend_usaha',
         // Subscription & plan
         'owner_register',
-        'konfirmasi_pembayaran',
+        'konfirmasi_pembayaran_subscription',
         'cancel_subscription',
         'create_plan',
         'update_plan',
@@ -53,7 +53,7 @@ class ActivityLogController extends Controller
         // Filter by kategori
         if ($request->kategori === 'subscription') {
             $query->whereIn('aktivitas', [
-                'owner_register', 'konfirmasi_pembayaran',
+                'owner_register', 'konfirmasi_pembayaran_subscription',
                 'cancel_subscription', 'create_plan', 'update_plan',
                 'delete_plan', 'auto_downgrade_free', 'request_upgrade_plan',
             ]);
