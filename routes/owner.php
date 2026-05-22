@@ -124,7 +124,7 @@ Route::middleware(['role:owner', 'check.subscription'])->group(function () {
     Route::get   ('menu',      [MenuController::class, 'index']);
     Route::post  ('menu',      [MenuController::class, 'store']);
     Route::get   ('menu/{id}', [MenuController::class, 'show']);
-    Route::post  ('menu/{id}', [MenuController::class, 'update']);
+    Route::put  ('menu/{id}', [MenuController::class, 'update']);
     Route::delete('menu/{id}', [MenuController::class, 'destroy']);
 
     // Addon
