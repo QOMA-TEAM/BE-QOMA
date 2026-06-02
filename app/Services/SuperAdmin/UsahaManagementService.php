@@ -187,6 +187,8 @@ class UsahaManagementService
             'nama_plan'    => $data['nama_plan'],
             'harga'        => $data['harga'],
             'batas_outlet' => $data['batas_outlet'],
+            'durasi_hari'  => $data['durasi_hari'],
+            'status'       => $data['status'] ?? 'aktif',
             'deskripsi'    => $data['deskripsi'] ?? null,
         ]);
 

@@ -39,6 +39,7 @@ Route::middleware('role:super_admin')->group(function () {
     Route::get   ('plans/{id}', [PlanController::class, 'show']);
     Route::put   ('plans/{id}', [PlanController::class, 'update']);
     Route::delete('plans/{id}', [PlanController::class, 'destroy']);
+    Route::patch('plans/{id}/status', [PlanController::class, 'toggleStatus']);
 
     Route::get ('subscriptions',                             [SubscriptionController::class, 'index']);
     Route::get ('subscriptions/{id}',                        [SubscriptionController::class, 'show']);
