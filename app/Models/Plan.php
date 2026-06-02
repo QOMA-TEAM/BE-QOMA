@@ -17,6 +17,7 @@ class Plan extends Model
         'harga',
         'batas_outlet',
         'durasi_hari',
+        'is_lifetime',
         'deskripsi',
         'status'
     ];

@@ -12,16 +12,18 @@ class DashboardService
     public function getStats(): array
     {
         // Total pendapatan dari semua subscription aktif
-        $totalPendapatanSubscription = Subscription::where('status', 'active')
+        $totalPendapatanSubscription = Subscription::where('subscriptions.status', 'active')
             ->join('plans', 'subscriptions.plan_id', '=', 'plans.id')
-            ->sum('plans.harga');
+            ->selectRaw('COALESCE(SUM(plans.harga),0) as total')
+            ->value('total');
 
         // Total pendapatan bulan ini
-        $totalPendapatanBulanIni = Subscription::where('status', 'active')
-            ->whereMonth('start_date', now()->month)
-            ->whereYear('start_date', now()->year)
+        $totalPendapatanBulanIni = Subscription::where('subscriptions.status', 'active')
+            ->whereMonth('subscriptions.start_date', now()->month)
+            ->whereYear('subscriptions.start_date', now()->year)
             ->join('plans', 'subscriptions.plan_id', '=', 'plans.id')
-            ->sum('plans.harga');
+            ->selectRaw('COALESCE(SUM(plans.harga),0) as total')
+            ->value('total');
 
         return [
             'ringkasan' => [
@@ -37,9 +39,13 @@ class DashboardService
                 'suspended' => Usaha::where('status', 'suspended')->count(),
                 'rejected'  => Usaha::where('status', 'rejected')->count(),
             ],
-            'subscription_by_plan' => Subscription::where('status', 'active')
+            'subscription_by_plan' => Subscription::where('subscriptions.status', 'active')
                 ->join('plans', 'subscriptions.plan_id', '=', 'plans.id')
-                ->select('plans.nama_plan', DB::raw('COUNT(*) as total'), DB::raw('SUM(plans.harga) as pendapatan'))
+                ->select(
+                    'plans.nama_plan',
+                    DB::raw('COUNT(*) as total'),
+                    DB::raw('SUM(plans.harga) as pendapatan')
+                )
                 ->groupBy('plans.id', 'plans.nama_plan')
                 ->get(),
 
