@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // ─── CORS: izinkan request dari FE (localhost:3000) ───────────────────
+        $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
+
+        // Jangan validasi CSRF untuk API routes
+        $middleware->validateCsrfTokens(except: ['api/*']);
+
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'check.subscription'   => \App\Http\Middleware\CheckSubscription::class,

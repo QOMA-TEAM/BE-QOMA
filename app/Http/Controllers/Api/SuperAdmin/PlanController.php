@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Http\Controllers\Api\SuperAdmin;
+
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Services\SuperAdmin\UsahaManagementService;
@@ -10,12 +12,16 @@ use App\Http\Resources\SuperAdmin\PlanResource;
 class PlanController extends Controller
 {
     use HasPagination;
+
     public function __construct(private UsahaManagementService $service) {}
 
     public function index(Request $request)
     {
         $plans = Plan::withCount('subscriptions')
-                    ->paginate($this->getPerPage($request));
+                     ->paginate($this->getPerPage($request));
+
+        // Pakai PlanResource agar status ikut ter-return
+        $plans->getCollection()->transform(fn($plan) => new PlanResource($plan));
 
         return response()->json(
             $this->paginateResponse($plans, 'Daftar plan')
@@ -30,10 +36,15 @@ class PlanController extends Controller
             'batas_outlet' => 'required|integer|min:-1',
             'durasi_hari'  => 'required|integer|min:1',
             'deskripsi'    => 'nullable|string',
+            'status'       => 'sometimes|in:aktif,tidak aktif', // ← tambah
         ]);
 
         $plan = $this->service->createPlan($request->all());
-        return response()->json(['message' => 'Plan dibuat', 'data' =>new PlanResource($plan)], 201);
+
+        return response()->json([
+            'message' => 'Plan dibuat',
+            'data'    => new PlanResource($plan),
+        ], 201);
     }
 
     public function update(Request $request, string $id)
@@ -44,11 +55,16 @@ class PlanController extends Controller
             'batas_outlet' => 'sometimes|integer|min:-1',
             'durasi_hari'  => 'required|integer|min:1',
             'deskripsi'    => 'nullable|string',
+            'status'       => 'sometimes|in:aktif,tidak aktif', // ← tambah
         ]);
 
         $plan = Plan::findOrFail($id);
         $plan = $this->service->updatePlan($plan, $request->all());
-        return response()->json(['message' => 'Plan diupdate', 'data' => new PlanResource($plan)]);
+
+        return response()->json([
+            'message' => 'Plan diupdate',
+            'data'    => new PlanResource($plan),
+        ]);
     }
 
     public function destroy(string $id)
@@ -64,9 +80,11 @@ class PlanController extends Controller
 
     public function show(string $id)
     {
+        $plan = Plan::withCount('subscriptions')->findOrFail($id);
+
         return response()->json([
             'message' => 'Detail plan',
-            'data'    => Plan::withCount('subscriptions')->findOrFail($id),
+            'data'    => new PlanResource($plan),
         ]);
     }
 }

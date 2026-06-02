@@ -12,7 +12,7 @@ class ActivityLogController extends Controller
     use HasPagination;
 
     // Aktivitas yang relevan untuk super admin
-    private const SUPER_ADMIN_AKTIVITAS = [
+    private const SUPER_ADMIN_AKTIVITAS = [ 
         // Usaha management
         'approve_usaha',
         'reject_usaha',

@@ -26,7 +26,7 @@ class UsahaManagementResource extends JsonResource
             ]),
             'subscription'   => $this->whenLoaded('subscription', fn() =>
                 $this->subscription ? [
-                    'plan'       => $this->subscription->plan->nama_plan ?? '-',
+                    'plan'       => $this->subscription->plan?->nama_plan ?? '-',
                     'status'     => $this->subscription->status,
                     'start_date' => $this->subscription->start_date?->format('Y-m-d'),
                     'end_date'   => $this->subscription->end_date?->format('Y-m-d'),

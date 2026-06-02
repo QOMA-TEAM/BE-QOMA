@@ -21,6 +21,10 @@ class UsahaManagementService
             $query->where('status', $filters['status']);
         }
 
+        if (!empty($filters['exclude_status'])) {
+            $query->where('status', '!=', $filters['exclude_status']);
+        }
+
         if (!empty($filters['search'])) {
             $query->where(fn($q) =>
                 $q->where('nama_usaha', 'like', "%{$filters['search']}%")

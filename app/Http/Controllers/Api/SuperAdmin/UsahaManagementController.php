@@ -1,128 +1,224 @@
 <?php
+namespace App\Services\SuperAdmin;
+use App\Models\{Usaha, UsahaRejection, User};
+use App\Services\{ActivityLogService, NotificationService};
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
-namespace App\Http\Controllers\Api\SuperAdmin;
-
-use App\Http\Controllers\Controller;
-use App\Models\Usaha;
-use App\Services\SuperAdmin\UsahaManagementService;
-use App\Traits\HasPagination;
-use Illuminate\Http\Request;
-use App\Http\Resources\SuperAdmin\UsahaManagementResource;
-
-class UsahaManagementController extends Controller
+class UsahaManagementService
 {
-    use HasPagination;
-
-    public function __construct(private UsahaManagementService $service) {}
-
-    // GET /super-admin/usaha?status=pending&search=warung&page=1&per_page=10
-    public function index(Request $request)
+    public function listUsaha(array $filters = [], int $perPage = 15)
     {
-        $usahas = $this->service->listUsaha(
-            $request->only(['status', 'search']),
-            $this->getPerPage($request)
-        );
+        $query = Usaha::select('id', 'nama_usaha', 'email', 'alamat', 'status', 'owner_id', 'approved_at', 'created_at')
+                    ->with([
+                        'owner:id,username,nama_lengkap,email,is_active',
+                        'subscription:id,usaha_id,plan_id,status,end_date',
+                        'subscription.plan:id,nama_plan,harga',
+                    ])
+                    ->withCount('outlets');
 
-        return response()->json(
-            $this->paginateResponse($usahas, 'Daftar semua usaha')
-        );
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['exclude_status'])) {
+            $query->where('status', '!=', $filters['exclude_status']);
+        }
+
+        if (!empty($filters['search'])) {
+            $query->where(fn($q) =>
+                $q->where('nama_usaha', 'like', "%{$filters['search']}%")
+                ->orWhere('email', 'like', "%{$filters['search']}%")
+            );
+        }
+
+        return $query->latest()->paginate($perPage);
     }
 
-    // GET /super-admin/usaha/{id}
-    public function show(string $id)
+    public function detailUsaha(string $id): Usaha
     {
-        $usaha = $this->service->detailUsaha($id);
+        return Usaha::select('id', 'nama_usaha', 'email', 'alamat', 'status', 'owner_id', 'catatan_admin', 'approved_at', 'rejected_at', 'created_at')
+                    ->with([
+                        'owner:id,username,nama_lengkap,email,is_active',
+                        'outlets:id,usaha_id,nama_outlet,alamat,status_buka',
+                        'subscription:id,usaha_id,plan_id,status,start_date,end_date',
+                        'subscription.plan:id,nama_plan,harga,durasi_hari',
+                        'rejections:id,usaha_id,rejected_by,alasan,created_at',
+                        'rejections.rejectedBy:id,username',
+                    ])
+                    ->findOrFail($id);
+    }
 
-        return response()->json([
-            'message' => 'Detail usaha',
-            'data'    =>new UsahaManagementResource($usaha),
+    public function approve(Usaha $usaha): Usaha
+    {
+        if ($usaha->status !== 'pending') {
+            throw new \Exception("Hanya usaha berstatus 'pending' yang bisa di-approve.");
+        }
+
+        $usaha->update(['status' => 'active', 'approved_at' => now()]);
+
+        // Aktifkan owner
+        if ($usaha->owner_id) {
+            User::where('id', $usaha->owner_id)->update(['is_active' => true]);
+        }
+
+        // Kirim notifikasi ke owner
+        if ($usaha->owner_id) {
+            NotificationService::notify(
+                $usaha->owner_id,
+                'Usaha Disetujui',
+                "Selamat! Usaha '{$usaha->nama_usaha}' Anda telah disetujui.",
+                'usaha_approved',
+                ['usaha_id' => $usaha->id],
+            );
+        }
+
+        ActivityLogService::log('approve_usaha', "Usaha '{$usaha->nama_usaha}' di-approve", ['usaha_id' => $usaha->id], $usaha->id);
+
+        return $usaha->fresh('owner');
+    }
+
+    public function reject(Usaha $usaha, string $alasan): Usaha
+    {
+        if ($usaha->status !== 'pending') {
+            throw new \Exception("Hanya usaha berstatus 'pending' yang bisa di-reject.");
+        }
+
+        $usaha->update(['status' => 'rejected', 'rejected_at' => now(), 'catatan_admin' => $alasan]);
+
+        UsahaRejection::create([
+            'id'          => Str::uuid(),
+            'usaha_id'    => $usaha->id,
+            'rejected_by' => auth()->id(),
+            'alasan'      => $alasan,
         ]);
-    }
 
-    // POST /super-admin/usaha/{id}/approve
-    public function approve(string $id)
-    {
-        $usaha = Usaha::findOrFail($id);
+        if ($usaha->owner_id) {
+            User::where('id', $usaha->owner_id)->update(['is_active' => false]);
 
-        try {
-            $usaha = $this->service->approve($usaha);
-            return response()->json([
-                'message' => 'Usaha berhasil di-approve',
-                'data'    => new UsahaManagementResource($usaha),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            NotificationService::notify(
+                $usaha->owner_id,
+                'Usaha Ditolak',
+                "Maaf, usaha '{$usaha->nama_usaha}' ditolak. Alasan: {$alasan}",
+                'usaha_rejected',
+                ['usaha_id' => $usaha->id, 'alasan' => $alasan],
+            );
         }
+
+        ActivityLogService::log('reject_usaha', "Usaha '{$usaha->nama_usaha}' di-reject. Alasan: {$alasan}", ['usaha_id' => $usaha->id], $usaha->id);
+
+        return $usaha->fresh('owner', 'rejections');
     }
 
-    // POST /super-admin/usaha/{id}/reject
-    public function reject(Request $request, string $id)
+    public function suspend(Usaha $usaha, ?string $catatan = null): Usaha
     {
-        $request->validate([
-            'alasan' => 'required|string|min:10|max:500',
+        if ($usaha->status === 'suspended') throw new \Exception('Usaha sudah suspended.');
+
+        $usaha->update(['status' => 'suspended', 'catatan_admin' => $catatan]);
+        $this->toggleUsahaUsers($usaha, false);
+
+        ActivityLogService::log('suspend_usaha', "Usaha '{$usaha->nama_usaha}' disuspend", ['usaha_id' => $usaha->id], $usaha->id);
+
+        return $usaha->fresh();
+    }
+
+    public function unsuspend(Usaha $usaha): Usaha
+    {
+        if ($usaha->status !== 'suspended') throw new \Exception('Usaha tidak dalam status suspended.');
+
+        $usaha->update(['status' => 'active', 'catatan_admin' => null]);
+        $this->toggleUsahaUsers($usaha, true);
+
+        ActivityLogService::log('unsuspend_usaha', "Usaha '{$usaha->nama_usaha}' diaktifkan", ['usaha_id' => $usaha->id], $usaha->id);
+
+        return $usaha->fresh();
+    }
+
+    public function listOwner(array $filters = [], int $perPage = 15)
+    {
+        $query = User::select('id', 'username', 'nama_lengkap', 'email', 'is_active', 'usaha_id', 'created_at')
+                    ->whereHas('role', fn($q) => $q->where('name', 'owner'))
+                    ->with(['usaha:id,owner_id,nama_usaha,status']);
+
+        if (!empty($filters['search'])) {
+            $query->where(fn($q) =>
+                $q->where('username', 'like', "%{$filters['search']}%")
+                ->orWhere('email', 'like', "%{$filters['search']}%")
+                ->orWhere('nama_lengkap', 'like', "%{$filters['search']}%")
+            );
+        }
+
+        if (isset($filters['is_active'])) {
+            $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
+        }
+
+        return $query->latest()->paginate($perPage);
+    }
+
+    public function resetPasswordOwner(User $owner): string
+    {
+        $newPassword = Str::random(12);
+        $owner->update(['password' => Hash::make($newPassword)]);
+
+        ActivityLogService::log('reset_password_owner', "Password owner '{$owner->username}' direset", ['owner_id' => $owner->id]);
+
+        return $newPassword;
+    }
+
+    public function toggleOwnerStatus(User $owner): User
+    {
+        $owner->update(['is_active' => !$owner->is_active]);
+        $status = $owner->is_active ? 'diaktifkan' : 'dinonaktifkan';
+        ActivityLogService::log('toggle_owner_status', "Owner '{$owner->username}' {$status}", ['owner_id' => $owner->id]);
+
+        return $owner->fresh();
+    }
+
+    // Manage Plans (CRUD untuk super admin)
+    public function listPlans()
+    {
+        return \App\Models\Plan::withCount('subscriptions')->get();
+    }
+
+    public function createPlan(array $data): \App\Models\Plan
+    {
+        $plan = \App\Models\Plan::create([
+            'id'           => Str::uuid(),
+            'nama_plan'    => $data['nama_plan'],
+            'harga'        => $data['harga'],
+            'batas_outlet' => $data['batas_outlet'],
+            'deskripsi'    => $data['deskripsi'] ?? null,
         ]);
 
-        $usaha = Usaha::findOrFail($id);
-
-        try {
-            $usaha = $this->service->reject($usaha, $request->alasan);
-            return response()->json([
-                'message' => 'Usaha berhasil di-reject',
-                'data'    => new UsahaManagementResource($usaha),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        ActivityLogService::log('create_plan', "Plan '{$plan->nama_plan}' dibuat");
+        return $plan;
     }
 
-    // POST /super-admin/usaha/{id}/suspend
-    public function suspend(Request $request, string $id)
+    public function updatePlan(\App\Models\Plan $plan, array $data): \App\Models\Plan
     {
-        $request->validate([
-            'catatan' => 'nullable|string|max:500',
-        ]);
-
-        $usaha = Usaha::findOrFail($id);
-
-        try {
-            $usaha = $this->service->suspend($usaha, $request->catatan);
-            return response()->json([
-                'message' => 'Usaha berhasil disuspend',
-                'data'    => new UsahaManagementResource($usaha),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        $plan->update($data);
+        ActivityLogService::log('update_plan', "Plan '{$plan->nama_plan}' diupdate");
+        return $plan->fresh();
     }
 
-    // POST /super-admin/usaha/{id}/unsuspend
-    public function unsuspend(string $id)
+    public function deletePlan(\App\Models\Plan $plan): void
     {
-        $usaha = Usaha::findOrFail($id);
-
-        try {
-            $usaha = $this->service->unsuspend($usaha);
-            return response()->json([
-                'message' => 'Usaha berhasil diaktifkan kembali',
-                'data'    => new UsahaManagementResource($usaha),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        if ($plan->subscriptions()->where('status', 'active')->exists()) {
+            throw new \Exception('Plan tidak bisa dihapus karena masih ada subscriber aktif.');
         }
+        $plan->delete();
+        ActivityLogService::log('delete_plan', "Plan '{$plan->nama_plan}' dihapus");
     }
 
-    // GET /super-admin/usaha/pending — shortcut untuk approval queue
-    public function pending(Request $request)
+    public function ownerByUsaha(string $usahaId)
     {
-        $request->merge(['status' => 'pending']);
+        $usaha = Usaha::with('owner')->findOrFail($usahaId);
 
-        $usahas = $this->service->listUsaha(
-            ['status' => 'pending', 'search' => $request->search],
-            $this->getPerPage($request)
-        );
+        return $usaha->owner;
+    }
 
-        return response()->json(
-            $this->paginateResponse($usahas, 'Daftar usaha menunggu approval')
-        );
+    private function toggleUsahaUsers(Usaha $usaha, bool $isActive): void
+    {
+        User::where('usaha_id', $usaha->id)->update(['is_active' => $isActive]);
     }
 }
