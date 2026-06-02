@@ -3,10 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Plan extends Model
 {
+    protected $table = 'plans';
+
+    protected $keyType = 'string';
+    public $incrementing = false;
+
     protected $fillable = [
         'id',
         'nama_plan',
@@ -14,17 +18,15 @@ class Plan extends Model
         'batas_outlet',
         'durasi_hari',
         'deskripsi',
-        'is_lifetime',
-        'status',       // ← tambah ini
+        'status'
     ];
 
-    protected $casts = [
-        'harga'       => 'decimal:2',
-        'is_lifetime' => 'boolean',
-    ];
-
-    public function subscriptions(): HasMany
+    public function subscriptions()
     {
-        return $this->hasMany(Subscription::class);
+        return $this->hasMany(
+            Subscription::class,
+            'plan_id',
+            'id'
+        );
     }
 }
