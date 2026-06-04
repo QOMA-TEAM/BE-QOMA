@@ -41,7 +41,6 @@ class PesananPublicController extends Controller
             'items.*.addons.*.addon_id'  => 'required|string|exists:addon,id',
             'items.*.addons.*.qty'       => 'required|integer|min:1',
             'tipe_pesanan' => 'nullable|in:dine_in,take_away',
-            'expired_at'     => now()->addMinutes(10),
         ]);
 
         // 1. Validasi outlet buka
@@ -185,7 +184,13 @@ class PesananPublicController extends Controller
             );
 
             // Broadcast event ke kasir (real-time update)
-            broadcast(new PesananBaru($pesanan->load('meja', 'details')))->toOthers();
+            try {
+                broadcast(new PesananBaru($pesanan->load('meja', 'details')))->toOthers();
+            } catch (\Exception $e) {
+                // Broadcast gagal tidak boleh menggagalkan pesanan
+                // Log saja, pesanan tetap berhasil
+                \Log::warning('Broadcast PesananBaru gagal: ' . $e->getMessage());
+            }
 
             // Response ke pelanggan
             return response()->json([

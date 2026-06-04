@@ -23,9 +23,10 @@ class BahanOutletResource extends JsonResource
             'is_mendekati_expired'=> $mendekatiExpired,
             'is_sudah_expired'    => $sudahExpired,
             'bahan_master'        => $this->whenLoaded('bahanMaster', fn() => [
-                'id'     => $this->bahanMaster->id,
-                'nama'   => $this->bahanMaster->nama,
-                'satuan' => $this->bahanMaster->satuan,
+                'id'            => $this->bahanMaster->id,
+                'nama'          => $this->bahanMaster->nama,
+                'satuan'        => $this->bahanMaster->satuan,
+                'harga_default' => (float) $this->bahanMaster->harga_default,
                 'gambar' => $this->bahanMaster->gambar
                                 ? asset('storage/' . $this->bahanMaster->gambar)
                                 : null,
