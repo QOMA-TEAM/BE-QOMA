@@ -20,6 +20,10 @@ class ActivityLogController extends Controller
         $logs = ActivityLog::where('outlet_id', $outletId)
                            ->with('user:id,username,nama_lengkap')
                            ->when($request->aktivitas, fn($q) => $q->where('aktivitas', $request->aktivitas))
+                           ->when($request->search, fn($q) => $q->where(function ($query) use ($request) {
+                               $query->where('deskripsi', 'like', '%' . $request->search . '%')
+                                     ->orWhere('aktivitas', 'like', '%' . $request->search . '%');
+                           }))
                            ->when($request->dari,      fn($q) => $q->whereDate('created_at', '>=', $request->dari))
                            ->when($request->sampai,    fn($q) => $q->whereDate('created_at', '<=', $request->sampai))
                            ->latest()

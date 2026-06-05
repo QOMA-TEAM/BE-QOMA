@@ -58,6 +58,25 @@ class OwnerSubscriptionController extends Controller
         }
     }
 
+    // GET /owner/subscription/pilih-outlet-nonaktif — info antrian & daftar outlet
+    public function deactivationQueueInfo()
+    {
+        $usahaId = auth()->user()->usaha_id;
+        $data    = $this->service->getDeactivationQueue($usahaId);
+
+        if (!$data['ada_queue']) {
+            return response()->json([
+                'message' => 'Tidak ada antrian deactivation outlet saat ini.',
+                'data'    => null,
+            ]);
+        }
+
+        return response()->json([
+            'message' => $data['pesan'],
+            'data'    => $data,
+        ]);
+    }
+
     // POST /owner/subscription/pilih-outlet-nonaktif
     public function pilihOutletNonaktif(Request $request)
     {
@@ -71,6 +90,11 @@ class OwnerSubscriptionController extends Controller
         try {
             $result = $this->service->pilihOutletNonaktif($usahaId, $request->outlet_ids);
             return response()->json($result);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'Tidak ada antrian deactivation outlet yang aktif. Pastikan subscription Anda sudah expired dan ada kelebihan outlet.',
+                'code'    => 'NO_DEACTIVATION_QUEUE',
+            ], 422);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

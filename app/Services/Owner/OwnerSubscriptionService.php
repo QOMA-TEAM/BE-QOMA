@@ -130,6 +130,34 @@ class OwnerSubscriptionService
     }
 
     /**
+     * Ambil info deactivation queue yang pending (untuk ditampilkan ke owner)
+     */
+    public function getDeactivationQueue(string $usahaId): array
+    {
+        $queue = OutletDeactivationQueue::where('usaha_id', $usahaId)
+            ->where('is_processed', false)
+            ->first();
+
+        if (!$queue) {
+            return ['ada_queue' => false];
+        }
+
+        // Daftar outlet yang aktif (bisa dipilih untuk dinonaktifkan)
+        $outlets = Outlet::where('usaha_id', $usahaId)
+            ->where('status_buka', true)
+            ->orderByDesc('created_at')
+            ->get(['id', 'nama_outlet', 'alamat', 'created_at']);
+
+        return [
+            'ada_queue'             => true,
+            'jumlah_harus_nonaktif' => $queue->jumlah_harus_nonaktif,
+            'deadline'              => $queue->deadline,
+            'pesan'                 => "Pilih {$queue->jumlah_harus_nonaktif} outlet yang ingin dinonaktifkan sebelum " . $queue->deadline?->format('d M Y H:i') . ". Jika tidak memilih, sistem akan otomatis menonaktifkan outlet yang paling baru ditambahkan.",
+            'outlets_aktif'         => $outlets,
+        ];
+    }
+
+    /**
      * Owner pilih outlet yang mau dinonaktifkan setelah grace period habis
      */
     public function pilihOutletNonaktif(string $usahaId, array $outletIds): array
@@ -153,7 +181,16 @@ class OwnerSubscriptionService
             throw new \Exception('Satu atau lebih outlet tidak valid atau bukan milik usaha ini.');
         }
 
-        return DB::transaction(function () use ($usahaId, $outletIds, $queue) {
+        // Cari free plan sebelum transaction
+        $freePlan = Plan::where('is_lifetime', true)
+            ->orderBy('harga')
+            ->first();
+
+        if (!$freePlan) {
+            throw new \Exception('Free plan tidak ditemukan. Hubungi administrator.');
+        }
+
+        return DB::transaction(function () use ($usahaId, $outletIds, $queue, $freePlan) {
 
             foreach ($outletIds as $outletId) {
                 $outlet = Outlet::find($outletId);
@@ -200,8 +237,20 @@ class OwnerSubscriptionService
                 ]);
             }
 
+            // Notif owner: berhasil downgrade
+            $usaha = \App\Models\Usaha::find($usahaId);
+            if ($usaha?->owner_id) {
+                NotificationService::notify(
+                    $usaha->owner_id,
+                    'Downgrade ke Free Plan',
+                    'Outlet yang dipilih telah dinonaktifkan. Usaha Anda kembali ke Free plan.',
+                    'downgrade_free',
+                    ['usaha_id' => $usahaId],
+                );
+            }
+
             return [
-                'message'            => 'Outlet berhasil dipilih dan dinonaktifkan. Usaha kembali ke Free plan.',
+                'message'              => 'Outlet berhasil dipilih dan dinonaktifkan. Usaha kembali ke Free plan.',
                 'outlet_dinonaktifkan' => count($outletIds),
             ];
         });

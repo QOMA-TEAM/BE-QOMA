@@ -190,6 +190,16 @@ class ProsesGracePeriodHabis extends Command
 
     private function downgradeKeFree(Subscription $sub): void
     {
+        // Cari free plan (lifetime / harga 0)
+        $freePlan = \App\Models\Plan::where('is_lifetime', true)
+            ->orderBy('harga')
+            ->first();
+
+        if (!$freePlan) {
+            $this->error("Free plan tidak ditemukan! Tidak bisa downgrade usaha {$sub->usaha_id}");
+            return;
+        }
+
         $sub->update(['status' => 'expired']);
 
         Subscription::create([
