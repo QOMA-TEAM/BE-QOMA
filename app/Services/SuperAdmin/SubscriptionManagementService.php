@@ -16,26 +16,14 @@ class SubscriptionManagementService
         $query = Subscription::with([
             'usaha:id,nama_usaha,email,alamat,owner_id',
             'usaha.owner:id,username,nama_lengkap,email',
-            'usaha.outlets:id,usaha_id',              // ← load outlets lewat relasi
             'plan:id,nama_plan,harga,batas_outlet',
         ]);
 
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        if (!empty($filters['plan_id'])) {
-            $query->where('plan_id', $filters['plan_id']);
-        }
-
-        if (!empty($filters['dari'])) {
-            $query->whereDate('start_date', '>=', $filters['dari']);
-        }
-
-        if (!empty($filters['sampai'])) {
-            $query->whereDate('start_date', '<=', $filters['sampai']);
-        }
-
+        if (!empty($filters['status']))  $query->where('status', $filters['status']);
+        if (!empty($filters['plan_id'])) $query->where('plan_id', $filters['plan_id']);
+        if (!empty($filters['tipe']))    $query->where('tipe', $filters['tipe']); // ← BARU
+        if (!empty($filters['dari']))    $query->whereDate('start_date', '>=', $filters['dari']);
+        if (!empty($filters['sampai']))  $query->whereDate('start_date', '<=', $filters['sampai']);
         if (!empty($filters['search'])) {
             $query->whereHas('usaha', fn($q) =>
                 $q->where('nama_usaha', 'like', "%{$filters['search']}%")

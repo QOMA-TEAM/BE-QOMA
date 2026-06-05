@@ -17,13 +17,9 @@ class CheckSubscription
         }
 
         if (!$user->usaha_id) {
-            return response()->json([
-                'message' => 'Belum memiliki usaha.',
-                'code'    => 'NO_USAHA',
-            ], 403);
+            return response()->json(['message' => 'Belum memiliki usaha.', 'code' => 'NO_USAHA'], 403);
         }
 
-        // Ambil subscription aktif
         $subscription = Subscription::where('usaha_id', $user->usaha_id)
                                     ->where('status', 'active')
                                     ->with('plan')
@@ -31,20 +27,27 @@ class CheckSubscription
                                     ->first();
 
         if (!$subscription) {
-            return response()->json([
-                'message' => 'Tidak ada subscription aktif.',
-                'code'    => 'NO_SUBSCRIPTION',
-            ], 403);
+            return response()->json(['message' => 'Tidak ada subscription aktif.', 'code' => 'NO_SUBSCRIPTION'], 403);
         }
 
-        // Cek expired — skip kalau plan lifetime (Free)
         if (!$subscription->plan->is_lifetime) {
-            if ($subscription->end_date < now()->toDateString()) {
+            $today = now()->toDateString();
 
-                // ✅ AUTO DOWNGRADE ke Free plan
+            // Cek apakah dalam grace period (expired tapi masih 3 hari)
+            if ($subscription->end_date < $today) {
+                if ($subscription->grace_period_end && $subscription->grace_period_end >= $today) {
+                    // Masih dalam grace period — boleh akses tapi kasih warning di header
+                    $request->merge([
+                        '_subscription'  => $subscription,
+                        '_grace_period'  => true,
+                        '_sisa_grace'    => now()->diffInDays($subscription->grace_period_end),
+                    ]);
+                    return $next($request);
+                }
+
+                // Grace period juga sudah habis → downgrade
                 $this->autoDowngradeToFree($subscription);
 
-                // Ambil ulang subscription setelah downgrade
                 $subscription = Subscription::where('usaha_id', $user->usaha_id)
                                             ->where('status', 'active')
                                             ->with('plan')
@@ -54,10 +57,8 @@ class CheckSubscription
         }
 
         $request->merge(['_subscription' => $subscription]);
-
         return $next($request);
     }
-
     /**
      * Auto downgrade Pro → Free saat expired
      * Outlet lama tetap jalan, hanya blokir tambah baru

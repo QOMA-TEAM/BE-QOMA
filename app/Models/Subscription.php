@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
 
 class Subscription extends Model
@@ -11,26 +9,32 @@ class Subscription extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'id',
-        'usaha_id',
-        'plan_id',
-        'start_date',
-        'end_date',
-        'status'
+        'id', 'usaha_id', 'plan_id',
+        'start_date', 'end_date',
+        'status', 'tipe', 'grace_period_end',
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'end_date' => 'date'
+        'start_date'       => 'date',
+        'end_date'         => 'date',
+        'grace_period_end' => 'date',
     ];
 
-    public function usaha()
+    public function usaha() { return $this->belongsTo(Usaha::class, 'usaha_id'); }
+    public function plan()  { return $this->belongsTo(Plan::class, 'plan_id'); }
+
+    // Helper: apakah dalam grace period
+    public function isInGracePeriod(): bool
     {
-        return $this->belongsTo(Usaha::class, 'usaha_id', 'id');
+        if (!$this->grace_period_end) return false;
+        return now()->toDateString() <= $this->grace_period_end->toDateString()
+               && now()->toDateString() > $this->end_date->toDateString();
     }
 
-    public function plan()
+    // Helper: sisa hari sampai expired
+    public function sisaHari(): int
     {
-        return $this->belongsTo(Plan::class, 'plan_id', 'id');
+        if (!$this->end_date) return 9999; // lifetime
+        return max(0, (int) now()->diffInDays($this->end_date, false));
     }
 }

@@ -160,4 +160,48 @@ class PesananController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
+
+    // GET /outlet/pesanan/semua — semua pesanan (paid, confirmed, pending, dll)
+    public function semua(Request $request)
+    {
+        $outletId = $this->getOutletId();
+
+        // Auto expire dulu
+        $this->service->autoExpirePesananPublic($outletId);
+
+        $query = \App\Models\Pesanan::select(
+                    'id', 'outlet_id', 'meja_id', 'nama_pelanggan',
+                    'no_telp', 'total_harga', 'status', 'tipe_pesanan',
+                    'expired_at', 'created_at'
+                )
+                ->where('outlet_id', $outletId)
+                ->with(['meja:id,nomor_meja', 'details:id,pesanan_id,menu_id,qty,harga', 'details.menu:id,nama'])
+                ->latest();
+
+        // Filter opsional
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->tipe_pesanan) {
+            $query->where('tipe_pesanan', $request->tipe_pesanan);
+        }
+
+        if ($request->dari) {
+            $query->whereDate('created_at', '>=', $request->dari);
+        }
+
+        if ($request->sampai) {
+            $query->whereDate('created_at', '<=', $request->sampai);
+        }
+
+        $pesanans = $query->paginate($this->getPerPage($request));
+
+        return response()->json(
+            $this->paginateResponse(
+                $pesanans->through(fn($p) => new PesananResource($p)),
+                'Semua pesanan'
+            )
+        );
+    }
 }

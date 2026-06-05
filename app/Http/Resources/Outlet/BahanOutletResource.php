@@ -34,3 +34,4 @@ class BahanOutletResource extends JsonResource
         ];
     }
 }
+

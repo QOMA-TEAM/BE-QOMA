@@ -57,4 +57,22 @@ class OwnerSubscriptionController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
+
+    // POST /owner/subscription/pilih-outlet-nonaktif
+    public function pilihOutletNonaktif(Request $request)
+    {
+        $request->validate([
+            'outlet_ids'   => 'required|array|min:1',
+            'outlet_ids.*' => 'required|string|exists:outlet,id',
+        ]); 
+
+        $usahaId = auth()->user()->usaha_id;
+
+        try {
+            $result = $this->service->pilihOutletNonaktif($usahaId, $request->outlet_ids);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
 }

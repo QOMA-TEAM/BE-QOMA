@@ -137,4 +137,7 @@ Route::middleware(['role:owner', 'check.subscription'])->group(function () {
     Route::get ('approval-harga',             [ApprovalHargaController::class, 'index']);
     Route::post('approval-harga/{id}/approve',[ApprovalHargaController::class, 'approve']);
     Route::post('approval-harga/{id}/reject', [ApprovalHargaController::class, 'reject']);
+
+    // Tambahkan di dalam Route::middleware(['role:owner', 'check.subscription'])
+    Route::post('subscription/pilih-outlet-nonaktif', [OwnerSubscriptionController::class, 'pilihOutletNonaktif']);
 });

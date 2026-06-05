@@ -57,4 +57,7 @@ Route::middleware('role:outlet')->group(function () {
 
     // Activity Log
     Route::get('activity-log', [ActivityLogController::class, 'index']);
+
+    // List SEMUA pesanan (dengan filter opsional)
+    Route::get('pesanan/semua', [PesananController::class, 'semua']);
 });

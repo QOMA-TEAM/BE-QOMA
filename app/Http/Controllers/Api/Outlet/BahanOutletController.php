@@ -20,7 +20,7 @@ class BahanOutletController extends Controller
         private ImageService $imageService
     ) {}
 
-    // GET /outlet/bahan-baku?search=x&sort_by=stok&sort_dir=asc&menipis=1
+    // GET /outlet/bahan-baku?search=   x&sort_by=stok&sort_dir=asc&menipis=1
     public function index(Request $request)
     {
         $outletId = $this->getOutletId();
