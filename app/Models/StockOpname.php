@@ -19,6 +19,6 @@ class StockOpname extends Model
     public function outlet()      { return $this->belongsTo(Outlet::class, 'outlet_id'); }
     public function bahanMaster() { return $this->belongsTo(BahanMaster::class, 'bahan_master_id'); }
 
-    public function isDraft(): bool  { return $this->status === 'draft'; }
-    public function isFinal(): bool  { return $this->status === 'final'; }
+    public function isDraft(): bool { return $this->status === 'draft'; }
+    public function isFinal(): bool { return $this->status === 'final'; }
 }

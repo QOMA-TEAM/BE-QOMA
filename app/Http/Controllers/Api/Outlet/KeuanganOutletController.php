@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api\Outlet;
 
 use App\Http\Controllers\Controller;
@@ -15,14 +14,6 @@ class KeuanganOutletController extends Controller
 
     public function __construct(private LaporanKeuanganService $service) {}
 
-    /**
-     * GET /outlet/keuangan?range=7days
-     *
-     * Return:
-     * - cards: pendapatan, pengeluaran, kerugian, keuntungan
-     * - detail per hari (untuk grafik)
-     * - status: untung / rugi
-     */
     public function index(Request $request)
     {
         $outletId = $this->getOutletId();
@@ -40,40 +31,64 @@ class KeuanganOutletController extends Controller
             default => [now()->subDays(29)->toDateString(), now()->toDateString()],
         };
 
-        // Ambil dari laporan_keuangan (sudah di-cache saat ada transaksi)
-        $laporan = LaporanKeuangan::where('outlet_id', $outletId)
-            ->where('tipe_periode', 'daily')
-            ->whereBetween('periode', [$dari, $sampai])
-            ->orderBy('periode')
-            ->get();
+        $laporan = LaporanKeuangan::select(
+                        'id', 'outlet_id', 'total_pendapatan', 'total_pengeluaran',
+                        'total_kerugian', 'total_keuntungan', 'periode'
+                    )
+                    ->where('outlet_id', $outletId)
+                    ->where('tipe_periode', 'daily')
+                    ->whereBetween('periode', [$dari, $sampai])
+                    ->orderBy('periode')
+                    ->get();
 
-        $totalPendapatan  = $laporan->sum('total_pendapatan');
-        $totalPengeluaran = $laporan->sum('total_pengeluaran');
-        $totalKerugian    = $laporan->sum('total_kerugian');
+        $totalPendapatan  = (float) $laporan->sum('total_pendapatan');
+        $totalPengeluaran = (float) $laporan->sum('total_pengeluaran');
+        $totalKerugian    = (float) $laporan->sum('total_kerugian');
         $totalKeuntungan  = $totalPendapatan - $totalPengeluaran - $totalKerugian;
+        $statusKeuangan   = $totalKeuntungan >= 0 ? 'untung' : 'rugi';
+        $selisih          = abs($totalKeuntungan);
 
-        // Logic untung/rugi
-        $statusKeuangan = $totalKeuntungan >= 0 ? 'untung' : 'rugi';
-        $selisih        = abs($totalKeuntungan);
+        // Kalau belum ada data laporan, hitung langsung dari transaksi
+        if ($laporan->isEmpty()) {
+            $totalPendapatan = (float) Pesanan::where('outlet_id', $outletId)
+                ->where('status', 'paid')
+                ->whereBetween(DB::raw('DATE(updated_at)'), [$dari, $sampai])
+                ->sum('total_harga');
+
+            $totalPengeluaran = (float) Pengeluaran::where('outlet_id', $outletId)
+                ->whereBetween('tanggal', [$dari, $sampai])
+                ->sum('total');
+
+            $totalKerugian = (float) Kerugian::where('outlet_id', $outletId)
+                ->whereBetween('tanggal', [$dari, $sampai])
+                ->sum('total_rugi');
+
+            $totalKeuntungan = $totalPendapatan - $totalPengeluaran - $totalKerugian;
+            $statusKeuangan  = $totalKeuntungan >= 0 ? 'untung' : 'rugi';
+            $selisih         = abs($totalKeuntungan);
+        }
+
+        $perPage  = $this->getPerPage($request);
+        $page     = (int) $request->get('page', 1);
+        $transaksi = $this->getListTransaksi($outletId, $dari, $sampai);
+        $total    = count($transaksi);
+        $items    = array_values(array_slice($transaksi, ($page - 1) * $perPage, $perPage));
 
         return response()->json([
             'message' => 'Laporan keuangan outlet',
             'filter'  => ['range' => $range, 'dari' => $dari, 'sampai' => $sampai],
             'data'    => [
-                // Cards
                 'cards' => [
-                    'total_pendapatan'  => (float) $totalPendapatan,
-                    'total_pengeluaran' => (float) $totalPengeluaran,
-                    'total_kerugian'    => (float) $totalKerugian,
-                    'total_keuntungan'  => (float) $totalKeuntungan,
+                    'total_pendapatan'  => $totalPendapatan,
+                    'total_pengeluaran' => $totalPengeluaran,
+                    'total_kerugian'    => $totalKerugian,
+                    'total_keuntungan'  => $totalKeuntungan,
                     'status'            => $statusKeuangan,
-                    'selisih'           => (float) $selisih,
+                    'selisih'           => $selisih,
                     'pesan'             => $statusKeuangan === 'untung'
                         ? "Outlet untung Rp " . number_format($selisih) . " dalam periode ini."
                         : "⚠️ Outlet rugi Rp " . number_format($selisih) . ". Pertimbangkan untuk menaikkan harga menu.",
                 ],
-
-                // List per hari (untuk grafik)
                 'grafik' => $laporan->map(fn($l) => [
                     'tanggal'           => $l->periode,
                     'total_pendapatan'  => (float) $l->total_pendapatan,
@@ -82,25 +97,21 @@ class KeuanganOutletController extends Controller
                     'total_keuntungan'  => (float) $l->total_keuntungan,
                     'status'            => $l->total_keuntungan >= 0 ? 'untung' : 'rugi',
                 ]),
-
-                // List transaksi detail
-                'transaksi' => $this->getListTransaksi($outletId, $dari, $sampai),
+                'transaksi' => [
+                    'data' => $items,
+                    'meta' => [
+                        'current_page' => $page,
+                        'per_page'     => $perPage,
+                        'total'        => $total,
+                        'last_page'    => (int) ceil($total / $perPage) ?: 1,
+                    ],
+                ],
             ],
         ]);
     }
 
-    /**
-     * Ambil list transaksi detail (pendapatan + pengeluaran + kerugian)
-     */
-    private function getListTransaksiPaginated(
-        string  $outletId,
-        string  $dari,
-        string  $sampai,
-        Request $request
-    ): array {
-        $perPage = $this->getPerPage($request);
-        $page    = (int) $request->get('page', 1);
-
+    private function getListTransaksi(string $outletId, string $dari, string $sampai): array
+    {
         $pendapatan = Pesanan::select('id', 'meja_id', 'nama_pelanggan', 'total_harga', 'updated_at')
             ->where('outlet_id', $outletId)
             ->where('status', 'paid')
@@ -123,9 +134,9 @@ class KeuanganOutletController extends Controller
             ->map(fn($p) => [
                 'tipe'       => 'pengeluaran',
                 'id'         => $p->id,
-                'keterangan' => $p->sumber ?? 'Pembelian bahan baku',
+                'keterangan' => $p->sumber ?? 'Pengeluaran',
                 'nominal'    => (float) $p->total,
-                'tanggal'    => $p->tanggal->format('Y-m-d'),
+                'tanggal'    => $p->tanggal,
                 'waktu'      => '-',
             ]);
 
@@ -138,27 +149,15 @@ class KeuanganOutletController extends Controller
                 'id'         => $k->id,
                 'keterangan' => 'Kerugian operasional',
                 'nominal'    => (float) $k->total_rugi,
-                'tanggal'    => $k->tanggal->format('Y-m-d'),
+                'tanggal'    => $k->tanggal,
                 'waktu'      => '-',
             ]);
 
-        $sorted = collect($pendapatan)
+        return collect($pendapatan)
             ->concat($pengeluaran)
             ->concat($kerugian)
             ->sortByDesc('tanggal')
-            ->values();
-
-        $total = $sorted->count();
-        $items = $sorted->forPage($page, $perPage)->values();
-
-        return [
-            'data' => $items,
-            'meta' => [
-                'current_page' => $page,
-                'per_page'     => $perPage,
-                'total'        => $total,
-                'last_page'    => (int) ceil($total / $perPage),
-            ],
-        ];
+            ->values()
+            ->toArray();
     }
 }

@@ -28,19 +28,19 @@ class PesananPublicController extends Controller
      */
     public function store(Request $request)
     {
+        // Di method store() — fix validasi
         $request->validate([
-            'outlet_id'      => 'required|string|exists:outlet,id',
-            'meja_id'        => 'required|string|exists:meja,id',
-            'nama_pelanggan' => 'required|string|max:100',
-            'no_telp'        => 'required|string|max:20',
-            'items'          => 'required|array|min:1',
-            'items.*.menu_id'=> 'required|string|exists:menu,id',
-            'items.*.qty'    => 'required|integer|min:1',
-            // addon opsional
+            'outlet_id'                  => 'required|string|exists:outlet,id',
+            'meja_id'                    => 'required|string|exists:meja,id',
+            'nama_pelanggan'             => 'required|string|max:100',
+            'no_telp'                    => 'required|string|max:20',
+            'items'                      => 'required|array|min:1',
+            'items.*.menu_id'            => 'required|string|exists:menu,id',
+            'items.*.qty'                => 'required|integer|min:1',
             'items.*.addons'             => 'nullable|array',
             'items.*.addons.*.addon_id'  => 'required|string|exists:addon,id',
             'items.*.addons.*.qty'       => 'required|integer|min:1',
-            'tipe_pesanan' => 'nullable|in:dine_in,take_away',
+            'tipe_pesanan'               => 'nullable|in:dine_in,take_away',
         ]);
 
         // 1. Validasi outlet buka
@@ -187,8 +187,6 @@ class PesananPublicController extends Controller
             try {
                 broadcast(new PesananBaru($pesanan->load('meja', 'details')))->toOthers();
             } catch (\Exception $e) {
-                // Broadcast gagal tidak boleh menggagalkan pesanan
-                // Log saja, pesanan tetap berhasil
                 \Log::warning('Broadcast PesananBaru gagal: ' . $e->getMessage());
             }
 
@@ -297,9 +295,17 @@ class PesananPublicController extends Controller
             'outlet_id' => 'required|string|exists:outlet,id',
         ]);
 
+        // Cari pesanan dulu
         $pesanan = Pesanan::where('id', $id)
                         ->where('outlet_id', $request->outlet_id)
                         ->firstOrFail();
+
+        // Cek status manual
+        if (!in_array($pesanan->status, ['pending'])) {
+            return response()->json([
+                'message' => 'Pesanan hanya bisa dibatalkan saat masih pending.',
+            ], 422);
+        }
 
         try {
             $pesanan = app(\App\Services\Outlet\PesananService::class)
@@ -307,10 +313,16 @@ class PesananPublicController extends Controller
 
             return response()->json([
                 'message' => 'Pesanan berhasil dibatalkan.',
-                'data'    => ['pesanan_id' => $pesanan->id, 'status' => $pesanan->status],
+                'data'    => [
+                    'pesanan_id' => $pesanan->id,
+                    'status'     => $pesanan->status,
+                ],
             ]);
+
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 422);
         }
     }
 }

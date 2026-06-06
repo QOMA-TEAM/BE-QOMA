@@ -3,7 +3,7 @@ namespace App\Services\Outlet;
 
 use App\Models\{BahanMaster, BahanOutlet, StockMovement, StockOpname};
 use App\Services\{ActivityLogService, LaporanKeuanganService};
-use Illuminate\Support\Facades\{DB, Storage};
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Events\StokMenipis;
 
@@ -13,12 +13,13 @@ class BahanOutletService
         private LaporanKeuanganService $laporanService
     ) {}
 
-    /**
-     * List bahan outlet + filter + sort
-     */
+    // ============================================================
+    // LIST & GET
+    // ============================================================
+
     public function getList(string $outletId, array $filters = [])
     {
-        $query = BahanOutlet::select('id', 'outlet_id', 'bahan_master_id', 'stok', 'stok_minimum', 'tanggal_masuk', 'tanggal_kadaluarsa')
+        $query = BahanOutlet::select('id', 'outlet_id', 'bahan_master_id', 'stok', 'stok_minimum')
                             ->where('outlet_id', $outletId)
                             ->with('bahanMaster:id,nama,satuan,harga_default,gambar');
 
@@ -32,294 +33,223 @@ class BahanOutletService
             $query->whereRaw('stok <= stok_minimum');
         }
 
-        if (!empty($filters['mendekati_expired'])) {
-            $query->whereNotNull('tanggal_kadaluarsa')
-                ->whereDate('tanggal_kadaluarsa', '<=', now()->addDays(3))
-                ->whereDate('tanggal_kadaluarsa', '>=', now());
-        }
-
-        $sortBy  = in_array($filters['sort_by'] ?? '', ['stok', 'tanggal_kadaluarsa', 'tanggal_masuk', 'created_at'])
-                ? $filters['sort_by']
-                : 'created_at';
+        $sortBy  = in_array($filters['sort_by'] ?? '', ['stok', 'created_at'])
+                   ? $filters['sort_by'] : 'created_at';
         $sortDir = ($filters['sort_dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
         return $query->orderBy($sortBy, $sortDir)->paginate($filters['per_page'] ?? 15);
     }
 
-    /**
-     * Tambah bahan baku baru ke outlet
-     * (pilih dari bahan_master milik owner)
-     */
+    // ============================================================
+    // RESTOCK — FEFO: insert batch baru ke stock_movements
+    // ============================================================
+
     public function tambah(string $outletId, array $data): BahanOutlet
     {
-        // Validasi bahan master ada dan milik usaha yang sama
-        $outletUsahaId = \App\Models\Outlet::find($outletId)->usaha_id;
-        $bahanMaster   = BahanMaster::where('id', $data['bahan_master_id'])
-                                    ->where('usaha_id', $outletUsahaId)
-                                    ->firstOrFail();
+        $outlet      = \App\Models\Outlet::findOrFail($outletId);
+        $bahanMaster = BahanMaster::where('id', $data['bahan_master_id'])
+                                  ->where('usaha_id', $outlet->usaha_id)
+                                  ->firstOrFail();
 
-        // Hitung total pengeluaran
-        $totalPengeluaran = ($data['jumlah'] ?? 0) * $bahanMaster->harga_default;
+        $jumlah           = (float) $data['jumlah'];
+        $totalPengeluaran = $jumlah * $bahanMaster->harga_default;
 
-        return DB::transaction(function () use ($outletId, $data, $bahanMaster, $totalPengeluaran) {
+        return DB::transaction(function () use ($outletId, $data, $bahanMaster, $jumlah, $totalPengeluaran) {
 
-            // Cek apakah bahan sudah ada di outlet ini
-            $existing = BahanOutlet::where('outlet_id', $outletId)
-                                   ->where('bahan_master_id', $bahanMaster->id)
-                                   ->first();
+            // 1. Pastikan row bahan_outlet ada (create jika belum ada)
+            $bahanOutlet = BahanOutlet::firstOrCreate(
+                ['outlet_id' => $outletId, 'bahan_master_id' => $bahanMaster->id],
+                [
+                    'id'           => Str::uuid(),
+                    'stok'         => 0,
+                    'stok_minimum' => $data['stok_minimum'] ?? 5,
+                ]
+            );
 
-            if ($existing) {
-                // Update stok (tambah)
-                $existing->update([
-                    'stok'               => $existing->stok + $data['jumlah'],
-                    'tanggal_masuk'      => $data['tanggal_masuk'] ?? $existing->tanggal_masuk,
-                    'tanggal_kadaluarsa' => $data['tanggal_kadaluarsa'] ?? $existing->tanggal_kadaluarsa,
-                    'stok_minimum'       => $data['stok_minimum'] ?? $existing->stok_minimum,
-                ]);
-                $bahan = $existing->fresh('bahanMaster');
-            } else {
-                // Buat baru
-                $bahan = BahanOutlet::create([
-                    'id'                 => Str::uuid(),
-                    'outlet_id'          => $outletId,
-                    'bahan_master_id'    => $bahanMaster->id,
-                    'stok'               => $data['jumlah'],
-                    'stok_minimum'       => $data['stok_minimum'] ?? 5,
-                    'tanggal_masuk'      => $data['tanggal_masuk'] ?? null,
-                    'tanggal_kadaluarsa' => $data['tanggal_kadaluarsa'] ?? null,
-                ]);
+            // 2. Tambah total stok
+            $bahanOutlet->increment('stok', $jumlah);
+
+            // Update stok_minimum jika dikirim
+            if (isset($data['stok_minimum'])) {
+                $bahanOutlet->update(['stok_minimum' => $data['stok_minimum']]);
             }
 
-            // Catat stock movement (in)
+            // 3. Insert batch baru ke stock_movements (FEFO)
             StockMovement::create([
-                'id'              => Str::uuid(),
-                'outlet_id'       => $outletId,
-                'bahan_master_id' => $bahanMaster->id,
-                'type'            => 'in',
-                'quantity'        => $data['jumlah'],
-                'expired_date'    => $data['tanggal_kadaluarsa'] ?? null,
-                'note'            => "Penambahan stok: {$bahanMaster->nama} {$data['jumlah']} {$bahanMaster->satuan}",
+                'id'                 => Str::uuid(),
+                'outlet_id'          => $outletId,
+                'bahan_master_id'    => $bahanMaster->id,
+                'type'               => 'in',
+                'quantity'           => $jumlah,
+                'remaining_quantity' => $jumlah,              // ← sisa batch = jumlah awal
+                'expired_date'       => $data['tanggal_kadaluarsa'] ?? null,
+                'is_finished'        => false,
+                'note'               => "Restock: {$bahanMaster->nama} +{$jumlah} {$bahanMaster->satuan}" .
+                                        (isset($data['tanggal_kadaluarsa']) ? " (exp: {$data['tanggal_kadaluarsa']})" : ''),
             ]);
 
-            // Catat pengeluaran (pembelian bahan baku)
+            // 4. Catat pengeluaran pembelian bahan
             \App\Models\Pengeluaran::create([
                 'id'              => Str::uuid(),
                 'outlet_id'       => $outletId,
                 'bahan_master_id' => $bahanMaster->id,
-                'sumber'          => "Beli {$bahanMaster->nama} {$data['jumlah']} {$bahanMaster->satuan}",
+                'sumber'          => "Restock {$bahanMaster->nama} {$jumlah} {$bahanMaster->satuan}",
                 'total'           => $totalPengeluaran,
                 'tanggal'         => now()->toDateString(),
             ]);
 
-            // Update laporan keuangan
+            // 5. Update laporan keuangan
             $this->laporanService->recalculate($outletId, now()->toDateString());
-            
-            $alerts = $this->getAlerts($outletId);
-                if ($alerts['total_alert'] > 0) {
-                    broadcast(new StokMenipis($outletId, $alerts))->toOthers();
-                }
-                
+
+            // 6. Cek & broadcast alert
+            $this->broadcastAlertJikaPerlu($outletId);
+
             ActivityLogService::log(
-                'tambah_bahan_outlet',
-                "Tambah stok {$bahanMaster->nama}: +{$data['jumlah']} {$bahanMaster->satuan}",
-                ['bahan_master_id' => $bahanMaster->id, 'jumlah' => $data['jumlah']],
+                'restock_bahan',
+                "Restock {$bahanMaster->nama}: +{$jumlah} {$bahanMaster->satuan}" .
+                (isset($data['tanggal_kadaluarsa']) ? " | expired: {$data['tanggal_kadaluarsa']}" : ''),
+                ['bahan_master_id' => $bahanMaster->id, 'jumlah' => $jumlah],
                 null,
                 $outletId,
             );
 
-
-            return $bahan;
+            return $bahanOutlet->fresh('bahanMaster');
         });
     }
 
+    // ============================================================
+    // FEFO — Kurangi stok (dipakai oleh pesanan, opname, dll)
+    // ============================================================
+
     /**
-     * Update konfigurasi bahan outlet (stok_minimum, dll)
+     * Kurangi stok pakai FEFO (First Expired First Out)
+     * Potong dari batch yang paling dekat expired duluan
      */
+    public function kurangiStokFEFO(
+        string $outletId,
+        string $bahanMasterId,
+        float  $jumlahDikurangi,
+        string $referenceId,
+        string $note
+    ): void {
+        $bahanOutlet = BahanOutlet::where('outlet_id', $outletId)
+                                  ->where('bahan_master_id', $bahanMasterId)
+                                  ->firstOrFail();
+
+        if ($bahanOutlet->stok < $jumlahDikurangi) {
+            throw new \Exception(
+                "Stok tidak cukup. Tersedia: {$bahanOutlet->stok} {$bahanOutlet->bahanMaster->satuan}, " .
+                "dibutuhkan: {$jumlahDikurangi}"
+            );
+        }
+
+        // Ambil batch aktif urut dari yang paling dekat expired (FEFO)
+        // Batch tanpa expired_date (null) dipakai paling akhir
+        $batches = StockMovement::where('outlet_id', $outletId)
+                                ->where('bahan_master_id', $bahanMasterId)
+                                ->where('type', 'in')
+                                ->where('is_finished', false)
+                                ->where('remaining_quantity', '>', 0)
+                                ->orderByRaw('CASE WHEN expired_date IS NULL THEN 1 ELSE 0 END')
+                                ->orderBy('expired_date', 'asc')
+                                ->get();
+
+        $sisaYangHarusDikurangi = $jumlahDikurangi;
+
+        foreach ($batches as $batch) {
+            if ($sisaYangHarusDikurangi <= 0) break;
+
+            $diambilDariBatch = min($batch->remaining_quantity, $sisaYangHarusDikurangi);
+
+            $remaining = $batch->remaining_quantity - $diambilDariBatch;
+
+            $batch->update([
+                'remaining_quantity' => $remaining,
+                'is_finished'        => $remaining <= 0,
+            ]);
+
+            // Catat stock movement out per batch
+            StockMovement::create([
+                'id'                 => Str::uuid(),
+                'outlet_id'          => $outletId,
+                'bahan_master_id'    => $bahanMasterId,
+                'type'               => 'out',
+                'quantity'           => $diambilDariBatch,
+                'remaining_quantity' => 0,
+                'expired_date'       => $batch->expired_date,
+                'is_finished'        => true,
+                'reference_id'       => $referenceId,
+                'note'               => "{$note} (dari batch exp: " .
+                                        ($batch->expired_date?->format('d M Y') ?? 'tanpa exp') . ")",
+            ]);
+
+            $sisaYangHarusDikurangi -= $diambilDariBatch;
+        }
+
+        // Update total stok di bahan_outlet
+        $bahanOutlet->decrement('stok', $jumlahDikurangi);
+
+        // Cek & broadcast alert
+        $this->broadcastAlertJikaPerlu($outletId);
+    }
+
+    // ============================================================
+    // KONFIGURASI
+    // ============================================================
+
     public function updateKonfigurasi(BahanOutlet $bahan, array $data): BahanOutlet
     {
         $bahan->update([
-            'stok_minimum'       => $data['stok_minimum']       ?? $bahan->stok_minimum,
-            'tanggal_kadaluarsa' => $data['tanggal_kadaluarsa'] ?? $bahan->tanggal_kadaluarsa,
+            'stok_minimum' => $data['stok_minimum'] ?? $bahan->stok_minimum,
         ]);
 
         return $bahan->fresh('bahanMaster');
     }
 
-    /**
-     * Stock Opname — pengurangan stok manual (bahan rusak, busuk, dll)
-     */
-    public function stockOpname(string $outletId, array $data, ?string $fotoPath = null): StockOpname
-    {
-        $bahan = BahanOutlet::where('outlet_id', $outletId)
-                            ->where('bahan_master_id', $data['bahan_master_id'])
-                            ->firstOrFail();
+    // ============================================================
+    // STOCK OPNAME — DRAFT SYSTEM
+    // ============================================================
 
-        if ($bahan->stok < $data['jumlah']) {
-            throw new \Exception("Stok tidak cukup. Stok saat ini: {$bahan->stok} {$bahan->bahanMaster->satuan}");
-        }
-
-        return DB::transaction(function () use ($outletId, $data, $bahan, $fotoPath) {
-
-            // Kurangi stok
-            $bahan->decrement('stok', $data['jumlah']);
-
-            // Buat record stock opname
-            $opname = StockOpname::create([
-                'id'              => Str::uuid(),
-                'outlet_id'       => $outletId,
-                'bahan_master_id' => $data['bahan_master_id'],
-                'tipe'            => $data['tipe'], // busuk, rusak, ga_layak, hilang
-                'jumlah'          => $data['jumlah'],
-                'foto_bukti'      => $fotoPath,
-                'keterangan'      => $data['keterangan'] ?? null,
-            ]);
-
-            // Catat stock movement (out)
-            StockMovement::create([
-                'id'              => Str::uuid(),
-                'outlet_id'       => $outletId,
-                'bahan_master_id' => $data['bahan_master_id'],
-                'type'            => 'out',
-                'quantity'        => $data['jumlah'],
-                'reference_id'    => $opname->id,
-                'note'            => "Stock opname [{$data['tipe']}]: {$bahan->bahanMaster->nama} -{$data['jumlah']} {$bahan->bahanMaster->satuan}",
-            ]);
-
-            // Hitung kerugian dari opname (jumlah × harga_default bahan)
-            $nilaiKerugian = $data['jumlah'] * $bahan->bahanMaster->harga_default;
-
-            \App\Models\Kerugian::create([
-                'id'        => Str::uuid(),
-                'outlet_id' => $outletId,
-                'total_rugi'=> $nilaiKerugian,
-                'tanggal'   => now()->toDateString(),
-            ]);
-
-            // Update laporan keuangan
-            $this->laporanService->recalculate($outletId, now()->toDateString());
-
-            ActivityLogService::log(
-                'stock_opname',
-                "Stock opname [{$data['tipe']}]: {$bahan->bahanMaster->nama} -{$data['jumlah']} {$bahan->bahanMaster->satuan} (Kerugian: Rp " . number_format($nilaiKerugian) . ")",
-                ['opname_id' => $opname->id, 'tipe' => $data['tipe'], 'jumlah' => $data['jumlah']],
-                null,
-                $outletId,
-            );
-
-            return $opname->load('bahanMaster');
-        });
-    }
-
-    /**
-     * Alert system — stok menipis + mendekati expired
-     */
-    public function getAlerts(string $outletId): array
-    {
-        // Satu query untuk semua alert, bukan 3 query terpisah
-        $semuaBahan = BahanOutlet::select('id', 'outlet_id', 'bahan_master_id', 'stok', 'stok_minimum', 'tanggal_kadaluarsa')
-                                ->where('outlet_id', $outletId)
-                                ->with('bahanMaster:id,nama,satuan')
-                                ->get();
-
-        $stokMenipis     = collect();
-        $mendekatiExpired = collect();
-        $sudahExpired    = collect();
-
-        foreach ($semuaBahan as $b) {
-            // Cek stok menipis
-            if ($b->stok <= $b->stok_minimum) {
-                $stokMenipis->push([
-                    'tipe'          => 'stok_menipis',
-                    'bahan'         => $b->bahanMaster->nama,
-                    'satuan'        => $b->bahanMaster->satuan,
-                    'stok_saat_ini' => (float) $b->stok,
-                    'stok_minimum'  => (float) $b->stok_minimum,
-                    'pesan'         => "Stok {$b->bahanMaster->nama} menipis! Sisa {$b->stok} {$b->bahanMaster->satuan}",
-                ]);
-            }
-
-            // Cek expired
-            if ($b->tanggal_kadaluarsa) {
-                $tgl = \Carbon\Carbon::parse($b->tanggal_kadaluarsa);
-
-                if ($tgl->isPast() && $b->stok > 0) {
-                    $sudahExpired->push([
-                        'tipe'               => 'sudah_expired',
-                        'bahan'              => $b->bahanMaster->nama,
-                        'stok_saat_ini'      => (float) $b->stok,
-                        'tanggal_kadaluarsa' => $tgl->format('Y-m-d'),
-                        'pesan'              => "⚠️ {$b->bahanMaster->nama} sudah EXPIRED sejak {$tgl->format('d M Y')}!",
-                    ]);
-                } elseif ($tgl->isFuture() && $tgl->diffInDays(now()) <= 3) {
-                    $mendekatiExpired->push([
-                        'tipe'               => 'mendekati_expired',
-                        'bahan'              => $b->bahanMaster->nama,
-                        'satuan'             => $b->bahanMaster->satuan,
-                        'stok_saat_ini'      => (float) $b->stok,
-                        'tanggal_kadaluarsa' => $tgl->format('Y-m-d'),
-                        'sisa_hari'          => (int) now()->diffInDays($tgl),
-                        'pesan'              => "Stok {$b->bahanMaster->nama} expired dalam " . now()->diffInDays($tgl) . " hari!",
-                    ]);
-                }
-            }
-        }
-
-        return [
-            'total_alert'       => $stokMenipis->count() + $mendekatiExpired->count() + $sudahExpired->count(),
-            'stok_menipis'      => $stokMenipis->values(),
-            'mendekati_expired' => $mendekatiExpired->values(),
-            'sudah_expired'     => $sudahExpired->values(),
-        ];
-    }
-
-    /**
-     * Buat draft stock opname (belum fix, bisa di-edit)
-     */
     public function buatDraftOpname(string $outletId, array $data, ?string $fotoPath = null): StockOpname
     {
-        // Validasi bahan milik outlet ini
-        $bahan = BahanOutlet::where('outlet_id', $outletId)
-                            ->where('bahan_master_id', $data['bahan_master_id'])
-                            ->firstOrFail();
+        // Validasi bahan ada di outlet ini
+        $bahanOutlet = BahanOutlet::where('outlet_id', $outletId)
+                                  ->where('bahan_master_id', $data['bahan_master_id'])
+                                  ->firstOrFail();
 
-        // Cek apakah sudah ada draft untuk bahan ini di outlet ini
-        $existingDraft = StockOpname::where('outlet_id', $outletId)
-                                    ->where('bahan_master_id', $data['bahan_master_id'])
-                                    ->where('status', 'draft')
-                                    ->first();
+        // Update draft yang sudah ada untuk bahan yang sama
+        $existing = StockOpname::where('outlet_id', $outletId)
+                               ->where('bahan_master_id', $data['bahan_master_id'])
+                               ->where('status', 'draft')
+                               ->first();
 
-        if ($existingDraft) {
-            // Update draft yang sudah ada
-            if ($fotoPath && $existingDraft->foto_bukti) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($existingDraft->foto_bukti);
+        if ($existing) {
+            if ($fotoPath && $existing->foto_bukti) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($existing->foto_bukti);
             }
 
-            $existingDraft->update([
+            $existing->update([
                 'tipe'       => $data['tipe'],
                 'jumlah'     => $data['jumlah'],
-                'foto_bukti' => $fotoPath ?? $existingDraft->foto_bukti,
-                'keterangan' => $data['keterangan'] ?? $existingDraft->keterangan,
+                'foto_bukti' => $fotoPath ?? $existing->foto_bukti,
+                'keterangan' => $data['keterangan'] ?? $existing->keterangan,
             ]);
 
-            return $existingDraft->fresh('bahanMaster');
+            return $existing->fresh('bahanMaster');
         }
 
-        // Buat draft baru — stok BELUM dikurangi
         return StockOpname::create([
-            'id'              => \Illuminate\Support\Str::uuid(),
+            'id'              => Str::uuid(),
             'outlet_id'       => $outletId,
             'bahan_master_id' => $data['bahan_master_id'],
             'tipe'            => $data['tipe'],
             'jumlah'          => $data['jumlah'],
             'foto_bukti'      => $fotoPath,
             'keterangan'      => $data['keterangan'] ?? null,
-            'status'          => 'draft', // ← belum fix
+            'status'          => 'draft',
         ]);
     }
 
-    /**
-     * Update draft opname yang sudah ada
-     */
     public function updateDraftOpname(StockOpname $opname, array $data, ?string $fotoPath = null): StockOpname
     {
         if ($opname->isFinal()) {
@@ -340,9 +270,6 @@ class BahanOutletService
         return $opname->fresh('bahanMaster');
     }
 
-    /**
-     * Hapus draft opname
-     */
     public function hapusDraftOpname(StockOpname $opname): void
     {
         if ($opname->isFinal()) {
@@ -356,9 +283,18 @@ class BahanOutletService
         $opname->delete();
     }
 
+    public function getDraftOpname(string $outletId)
+    {
+        return StockOpname::select('id', 'outlet_id', 'bahan_master_id', 'tipe', 'jumlah', 'foto_bukti', 'keterangan', 'status', 'created_at')
+                          ->where('outlet_id', $outletId)
+                          ->where('status', 'draft')
+                          ->with('bahanMaster:id,nama,satuan,harga_default')
+                          ->latest()
+                          ->get();
+    }
+
     /**
-     * Finalisasi draft → final
-     * Baru di sini stok dikurangi dan kerugian dicatat
+     * Finalisasi draft → stok dikurangi FEFO
      */
     public function finalisasiOpname(StockOpname $opname): StockOpname
     {
@@ -366,81 +302,138 @@ class BahanOutletService
             throw new \Exception('Stock opname sudah final sebelumnya.');
         }
 
-        $bahan = BahanOutlet::where('outlet_id', $opname->outlet_id)
-                            ->where('bahan_master_id', $opname->bahan_master_id)
-                            ->firstOrFail();
+        $bahanOutlet = BahanOutlet::where('outlet_id', $opname->outlet_id)
+                                  ->where('bahan_master_id', $opname->bahan_master_id)
+                                  ->firstOrFail();
 
-        if ($bahan->stok < $opname->jumlah) {
+        if ($bahanOutlet->stok < $opname->jumlah) {
             throw new \Exception(
-                "Stok tidak cukup untuk finalisasi. Stok saat ini: {$bahan->stok} {$bahan->bahanMaster->satuan}, " .
-                "dibutuhkan: {$opname->jumlah} {$bahan->bahanMaster->satuan}"
+                "Stok tidak cukup. Tersedia: {$bahanOutlet->stok} {$bahanOutlet->bahanMaster->satuan}, " .
+                "dibutuhkan: {$opname->jumlah}"
             );
         }
 
-        return DB::transaction(function () use ($opname, $bahan) {
+        return DB::transaction(function () use ($opname, $bahanOutlet) {
 
             // Update status ke final
             $opname->update(['status' => 'final']);
 
-            // Baru kurangi stok setelah final
-            $bahan->decrement('stok', $opname->jumlah);
-
-            // Catat stock movement
-            StockMovement::create([
-                'id'              => \Illuminate\Support\Str::uuid(),
-                'outlet_id'       => $opname->outlet_id,
-                'bahan_master_id' => $opname->bahan_master_id,
-                'type'            => 'out',
-                'quantity'        => $opname->jumlah,
-                'reference_id'    => $opname->id,
-                'note'            => "Stock opname final [{$opname->tipe}]: {$bahan->bahanMaster->nama} -{$opname->jumlah} {$bahan->bahanMaster->satuan}",
-            ]);
+            // Kurangi stok FEFO
+            $this->kurangiStokFEFO(
+                $opname->outlet_id,
+                $opname->bahan_master_id,
+                (float) $opname->jumlah,
+                $opname->id,
+                "Stock opname [{$opname->tipe}]: {$bahanOutlet->bahanMaster->nama}"
+            );
 
             // Hitung dan catat kerugian
-            $nilaiKerugian = $opname->jumlah * $bahan->bahanMaster->harga_default;
+            $nilaiKerugian = $opname->jumlah * $bahanOutlet->bahanMaster->harga_default;
 
             \App\Models\Kerugian::create([
-                'id'         => \Illuminate\Support\Str::uuid(),
+                'id'         => Str::uuid(),
                 'outlet_id'  => $opname->outlet_id,
                 'total_rugi' => $nilaiKerugian,
                 'tanggal'    => now()->toDateString(),
             ]);
 
-            // Update laporan keuangan
             $this->laporanService->recalculate($opname->outlet_id, now()->toDateString());
 
             ActivityLogService::log(
                 'stock_opname_final',
-                "Stock opname FINAL [{$opname->tipe}]: {$bahan->bahanMaster->nama} -{$opname->jumlah} {$bahan->bahanMaster->satuan} (Kerugian: Rp " . number_format($nilaiKerugian) . ")",
-                ['opname_id' => $opname->id, 'tipe' => $opname->tipe, 'jumlah' => $opname->jumlah],
+                "Stock opname FINAL [{$opname->tipe}]: {$bahanOutlet->bahanMaster->nama} " .
+                "-{$opname->jumlah} {$bahanOutlet->bahanMaster->satuan} " .
+                "(Kerugian: Rp " . number_format($nilaiKerugian) . ")",
+                ['opname_id' => $opname->id],
                 null,
                 $opname->outlet_id,
             );
-
-            // Cek alert stok
-            $alerts = $this->getAlerts($opname->outlet_id);
-            if ($alerts['total_alert'] > 0) {
-                try {
-                    broadcast(new StokMenipis($opname->outlet_id, $alerts))->toOthers();
-                } catch (\Exception $e) {
-                    \Log::warning('Broadcast StokMenipis gagal: ' . $e->getMessage());
-                }
-            }
 
             return $opname->fresh('bahanMaster');
         });
     }
 
-    /**
-     * List draft opname milik outlet
-     */
-    public function getDraftOpname(string $outletId)
+    // ============================================================
+    // ALERTS — cek dari stock_movements, bukan bahan_outlet
+    // ============================================================
+
+    public function getAlerts(string $outletId): array
     {
-        return StockOpname::select('id', 'outlet_id', 'bahan_master_id', 'tipe', 'jumlah', 'foto_bukti', 'keterangan', 'status', 'created_at')
-                        ->where('outlet_id', $outletId)
-                        ->where('status', 'draft')
-                        ->with('bahanMaster:id,nama,satuan,harga_default')
-                        ->latest()
-                        ->get();
+        // 1. Stok menipis — dari bahan_outlet
+        $stokMenipis = BahanOutlet::select('id', 'outlet_id', 'bahan_master_id', 'stok', 'stok_minimum')
+                                  ->where('outlet_id', $outletId)
+                                  ->whereRaw('stok <= stok_minimum')
+                                  ->where('stok', '>', 0)
+                                  ->with('bahanMaster:id,nama,satuan')
+                                  ->get()
+                                  ->map(fn($b) => [
+                                      'tipe'          => 'stok_menipis',
+                                      'bahan'         => $b->bahanMaster->nama,
+                                      'satuan'        => $b->bahanMaster->satuan,
+                                      'stok_saat_ini' => (float) $b->stok,
+                                      'stok_minimum'  => (float) $b->stok_minimum,
+                                      'pesan'         => "Stok {$b->bahanMaster->nama} menipis! Sisa {$b->stok} {$b->bahanMaster->satuan}",
+                                  ]);
+
+        // 2. Batch mendekati expired (≤ 3 hari) — dari stock_movements
+        $mendekatiExpired = StockMovement::where('outlet_id', $outletId)
+                                         ->where('type', 'in')
+                                         ->where('is_finished', false)
+                                         ->where('remaining_quantity', '>', 0)
+                                         ->whereNotNull('expired_date')
+                                         ->whereDate('expired_date', '>', now())
+                                         ->whereDate('expired_date', '<=', now()->addDays(3))
+                                         ->with('bahanMaster:id,nama,satuan')
+                                         ->get()
+                                         ->map(fn($m) => [
+                                             'tipe'               => 'mendekati_expired',
+                                             'bahan'              => $m->bahanMaster->nama,
+                                             'satuan'             => $m->bahanMaster->satuan,
+                                             'remaining_quantity' => (float) $m->remaining_quantity,
+                                             'expired_date'       => $m->expired_date->format('Y-m-d'),
+                                             'sisa_hari'          => (int) now()->diffInDays($m->expired_date),
+                                             'pesan'              => "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired dalam " . now()->diffInDays($m->expired_date) . " hari!",
+                                         ]);
+
+        // 3. Batch sudah expired tapi masih ada stok — dari stock_movements
+        $sudahExpired = StockMovement::where('outlet_id', $outletId)
+                                     ->where('type', 'in')
+                                     ->where('is_finished', false)
+                                     ->where('remaining_quantity', '>', 0)
+                                     ->whereNotNull('expired_date')
+                                     ->whereDate('expired_date', '<', now())
+                                     ->with('bahanMaster:id,nama,satuan')
+                                     ->get()
+                                     ->map(fn($m) => [
+                                         'tipe'               => 'sudah_expired',
+                                         'bahan'              => $m->bahanMaster->nama,
+                                         'satuan'             => $m->bahanMaster->satuan,
+                                         'remaining_quantity' => (float) $m->remaining_quantity,
+                                         'expired_date'       => $m->expired_date->format('Y-m-d'),
+                                         'pesan'              => "⚠️ {$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} EXPIRED sejak {$m->expired_date->format('d M Y')}!",
+                                     ]);
+
+        return [
+            'total_alert'       => $stokMenipis->count() + $mendekatiExpired->count() + $sudahExpired->count(),
+            'stok_menipis'      => $stokMenipis->values(),
+            'mendekati_expired' => $mendekatiExpired->values(),
+            'sudah_expired'     => $sudahExpired->values(),
+        ];
+    }
+
+    // ============================================================
+    // PRIVATE HELPERS
+    // ============================================================
+
+    private function broadcastAlertJikaPerlu(string $outletId): void
+    {
+        try {
+            $alerts = $this->getAlerts($outletId);
+            if ($alerts['total_alert'] > 0) {
+                broadcast(new StokMenipis($outletId, $alerts))->toOthers();
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Broadcast StokMenipis gagal: ' . $e->getMessage());
+        }
     }
 }

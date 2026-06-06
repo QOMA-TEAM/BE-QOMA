@@ -116,7 +116,7 @@ class PesananController extends Controller
     {
         $outletId = $this->getOutletId();
         $request->validate([
-            'metode' => 'required|in:tunai,transfer,qris',
+            'metode' => 'required|in:tunai,transfer,qris,debit',
         ]);
 
         $pesanan = Pesanan::where('id', $id)->where('outlet_id', $outletId)->firstOrFail();

@@ -7,14 +7,19 @@ class StockMovement extends Model
     protected $table = 'stock_movements';
     protected $keyType = 'string';
     public $incrementing = false;
+
     protected $fillable = [
         'id', 'outlet_id', 'bahan_master_id',
-        'type', 'quantity', 'expired_date',
+        'type', 'quantity', 'remaining_quantity',
+        'expired_date', 'is_finished',
         'reference_id', 'note',
     ];
+
     protected $casts = [
-        'quantity'     => 'decimal:2',
-        'expired_date' => 'date',
+        'quantity'           => 'decimal:2',
+        'remaining_quantity' => 'decimal:2',
+        'expired_date'       => 'date',
+        'is_finished'        => 'boolean',
     ];
 
     public function outlet()      { return $this->belongsTo(Outlet::class, 'outlet_id'); }

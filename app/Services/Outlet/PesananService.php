@@ -6,6 +6,7 @@ use App\Models\{BahanOutlet, Menu, MenuOutlet, Pembayaran, Pesanan, PesananDetai
 use App\Services\{ActivityLogService, LaporanKeuanganService};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\Outlet\BahanOutletService;
 
 class PesananService
 {
@@ -410,6 +411,8 @@ class PesananService
 
     private function kurangiStokOtomatis(Pesanan $pesanan): void
     {
+        $bahanService = app(BahanOutletService::class);
+
         $details = PesananDetail::where('pesanan_id', $pesanan->id)
                                 ->with('menu.bahanMasters')
                                 ->get();
@@ -418,22 +421,25 @@ class PesananService
             foreach ($detail->menu->bahanMasters as $bahan) {
                 $jumlahKurang = $bahan->pivot->jumlah_pakai * $detail->qty;
 
+                // Cek apakah bahan ada di outlet
                 $bahanOutlet = BahanOutlet::where('outlet_id', $pesanan->outlet_id)
-                                          ->where('bahan_master_id', $bahan->id)
-                                          ->first();
+                                        ->where('bahan_master_id', $bahan->id)
+                                        ->first();
 
-                if ($bahanOutlet) {
-                    $bahanOutlet->decrement('stok', $jumlahKurang);
+                if (!$bahanOutlet) continue;
 
-                    StockMovement::create([
-                        'id'              => Str::uuid(),
-                        'outlet_id'       => $pesanan->outlet_id,
-                        'bahan_master_id' => $bahan->id,
-                        'type'            => 'out',
-                        'quantity'        => $jumlahKurang,
-                        'reference_id'    => $pesanan->id,
-                        'note'            => "Pesanan #{$pesanan->id} - {$detail->menu->nama} x{$detail->qty}",
-                    ]);
+                // Pakai FEFO — kurangi dari batch yang paling dekat expired
+                try {
+                    $bahanService->kurangiStokFEFO(
+                        $pesanan->outlet_id,
+                        $bahan->id,
+                        $jumlahKurang,
+                        $pesanan->id,
+                        "Pesanan #{$pesanan->id} - {$detail->menu->nama} x{$detail->qty}"
+                    );
+                } catch (\Exception $e) {
+                    // Stok tidak cukup — catat tapi tidak gagalkan pesanan
+                    \Log::warning("Stok tidak cukup saat kurangi otomatis: {$e->getMessage()}");
                 }
             }
         }

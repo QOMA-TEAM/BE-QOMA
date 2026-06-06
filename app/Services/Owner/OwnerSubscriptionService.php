@@ -72,60 +72,67 @@ class OwnerSubscriptionService
             ->first();
 
         if (!$subSekarang) {
-            throw new \Exception('Tidak ada subscription aktif untuk di-upgrade.');
+            throw new \Exception('Tidak ada subscription aktif.');
         }
 
-        if ($planBaru->harga <= $subSekarang->plan->harga) {
-            throw new \Exception('Plan yang dipilih tidak lebih tinggi dari plan saat ini.');
+        // ← FIX: tidak boleh upgrade ke plan yang sama
+        if ($planBaru->id === $subSekarang->plan_id) {
+            throw new \Exception('Anda sudah menggunakan plan ini.');
         }
 
-        // ← FIX: ganti $plan → $planBaru
+        // Tidak boleh upgrade ke Free plan
+        if ($planBaru->is_lifetime) {
+            throw new \Exception('Tidak bisa upgrade ke Free plan. Gunakan plan berbayar.');
+        }
+
+        // Buat subscription baru tipe upgrade — status pending tunggu konfirmasi
         $subBaru = Subscription::create([
             'id'         => Str::uuid(),
             'usaha_id'   => $usahaId,
             'plan_id'    => $planId,
             'start_date' => now()->toDateString(),
-            'end_date'   => now()->addDays($planBaru->durasi_hari)->toDateString(), // ← fix
+            'end_date'   => now()->addDays($planBaru->durasi_hari)->toDateString(),
             'status'     => 'pending',
-            'tipe'       => 'upgrade', // ← BARU
+            'tipe'       => 'upgrade',
         ]);
 
-        $usaha = \App\Models\Usaha::find($usahaId);
+        $usaha = \App\Models\Usaha::with('owner')->find($usahaId);
 
         NotificationService::notifySuperAdmins(
             'Request Upgrade Plan',
-            "Owner '{$usaha->owner->nama_lengkap}' dari usaha '{$usaha->nama_usaha}' request upgrade ke plan '{$planBaru->nama_plan}'.",
+            "Owner '{$usaha->owner->nama_lengkap}' dari '{$usaha->nama_usaha}' request upgrade ke '{$planBaru->nama_plan}'.",
             'upgrade_plan',
             [
                 'usaha_id'          => $usahaId,
                 'subscription_id'   => $subBaru->id,
                 'plan_baru'         => $planBaru->nama_plan,
                 'metode_pembayaran' => $metodePembayaran,
-                'tipe'              => 'upgrade', // ← BARU
+                'tipe'              => 'upgrade',
             ]
         );
 
         ActivityLogService::log(
             'request_upgrade_plan',
-            "Request upgrade ke plan '{$planBaru->nama_plan}' dengan metode '{$metodePembayaran}'",
+            "Request upgrade ke plan '{$planBaru->nama_plan}' via '{$metodePembayaran}'",
             ['plan_id' => $planId, 'metode' => $metodePembayaran],
             $usahaId,
         );
 
         return [
-            'message' => 'Request upgrade berhasil dikirim. Menunggu konfirmasi dari admin.',
+            'message' => 'Request upgrade berhasil dikirim. Menunggu konfirmasi pembayaran dari admin.',
             'subscription_baru' => [
                 'id'                => $subBaru->id,
                 'plan'              => $planBaru->nama_plan,
                 'harga'             => (float) $planBaru->harga,
                 'durasi_hari'       => $planBaru->durasi_hari,
+                'batas_outlet'      => $planBaru->batas_outlet === -1 ? 'Unlimited' : $planBaru->batas_outlet,
                 'status'            => 'pending',
                 'tipe'              => 'upgrade',
                 'metode_pembayaran' => $metodePembayaran,
             ],
             'instruksi' => $metodePembayaran === 'transfer'
                 ? 'Transfer ke BCA 1234567890 a/n PT QOMA INDONESIA sebesar Rp ' . number_format($planBaru->harga) . '.'
-                : 'Scan QRIS yang dikirimkan admin.',
+                : 'Scan QRIS yang dikirimkan admin untuk menyelesaikan pembayaran.',
         ];
     }
 
@@ -264,19 +271,20 @@ class OwnerSubscriptionService
             ->latest()
             ->first();
 
-        $hargaSekarang = $subSekarang?->plan->harga ?? 0;
-
-        return Plan::where('harga', '>', $hargaSekarang)
-            ->get()
-            ->map(fn($p) => [
-                'id'           => $p->id,
-                'nama_plan'    => $p->nama_plan,
-                'harga'        => (float) $p->harga,
-                'batas_outlet' => $p->batas_outlet === -1 ? 'Unlimited' : $p->batas_outlet,
-                'durasi_hari'  => $p->durasi_hari,
-                'deskripsi'    => $p->deskripsi,
-            ])
-            ->toArray();
+        // Tampilkan semua plan berbayar kecuali yang sedang dipakai
+        return Plan::where('is_lifetime', false)  // bukan Free
+                ->where('id', '!=', $subSekarang?->plan_id)
+                ->orderBy('harga', 'asc')
+                ->get()
+                ->map(fn($p) => [
+                    'id'           => $p->id,
+                    'nama_plan'    => $p->nama_plan,
+                    'harga'        => (float) $p->harga,
+                    'batas_outlet' => $p->batas_outlet === -1 ? 'Unlimited' : $p->batas_outlet,
+                    'durasi_hari'  => $p->durasi_hari,
+                    'deskripsi'    => $p->deskripsi,
+                ])
+                ->toArray();
     }
 
     public function processExpiredSubscriptions(): void

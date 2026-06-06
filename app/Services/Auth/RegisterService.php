@@ -46,12 +46,22 @@ class RegisterService
                 'status'     => $subStatus,
             ]);
 
-            NotificationService::notifySuperAdmins(
-                'Owner Baru Mendaftar',
-                "Owner '{$data['nama_owner']}' mendaftar dengan usaha '{$data['nama_usaha']}' (Plan: {$plan->nama_plan}).",
-                'new_owner_registration',
-                ['usaha_id' => $usaha->id, 'plan_name' => $plan->nama_plan]
-            );
+            try {
+                NotificationService::notifySuperAdmins(
+                    'Owner Baru Mendaftar',
+                    "Owner '{$data['nama_owner']}' mendaftar dengan usaha '{$data['nama_usaha']}' (Plan: {$plan->nama_plan}).",
+                    'new_owner_registration',
+                    [
+                        'usaha_id' => $usaha->id,
+                        'plan_name' => $plan->nama_plan
+                    ]
+                );
+            } catch (\Exception $e) {
+                \Log::warning(
+                    'Notifikasi gagal saat register: ' .
+                    $e->getMessage()
+                );
+            };
 
             ActivityLogService::log(
                 'owner_register',

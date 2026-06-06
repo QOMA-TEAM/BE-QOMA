@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('pembayaran', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('pesanan_id')->unique();
-            $table->string('metode')->nullable();
+            $table->enum('metode', ['tunai', 'transfer', 'qris', 'debit',]);
             $table->decimal('jumlah_bayar', 12, 2)->default(0);
             $table->enum('status', ['pending', 'paid'])->default('pending');
             $table->timestamp('psid_at')->nullable();

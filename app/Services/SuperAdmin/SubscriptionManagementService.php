@@ -1,29 +1,26 @@
 <?php
 namespace App\Services\SuperAdmin;
 
-use App\Models\{Subscription, Usaha};
+use App\Models\{Subscription, Usaha, User};
 use App\Services\{ActivityLogService, NotificationService};
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SubscriptionManagementService
 {
-    /**
-     * List semua subscription dengan join lengkap
-     * (usaha, owner, plan)
-     */
     public function list(array $filters = [], int $perPage = 15)
     {
         $query = Subscription::with([
-            'usaha:id,nama_usaha,email,alamat,owner_id',
+            'usaha:id,nama_usaha,email,owner_id',
             'usaha.owner:id,username,nama_lengkap,email',
             'plan:id,nama_plan,harga,batas_outlet',
         ]);
 
         if (!empty($filters['status']))  $query->where('status', $filters['status']);
         if (!empty($filters['plan_id'])) $query->where('plan_id', $filters['plan_id']);
-        if (!empty($filters['tipe']))    $query->where('tipe', $filters['tipe']); // ← BARU
+        if (!empty($filters['tipe']))    $query->where('tipe', $filters['tipe']);
         if (!empty($filters['dari']))    $query->whereDate('start_date', '>=', $filters['dari']);
         if (!empty($filters['sampai']))  $query->whereDate('start_date', '<=', $filters['sampai']);
+
         if (!empty($filters['search'])) {
             $query->whereHas('usaha', fn($q) =>
                 $q->where('nama_usaha', 'like', "%{$filters['search']}%")
@@ -33,101 +30,103 @@ class SubscriptionManagementService
         return $query->latest()->paginate($perPage);
     }
 
-    /**
-     * Detail 1 subscription — ini yang paling lengkap
-     */
-    public function detail(string $id): array
+    public function detail(string $id): Subscription
     {
-        $sub = Subscription::with([
-            'plan:id,nama_plan,harga,batas_outlet,deskripsi',
+        return Subscription::with([
             'usaha:id,nama_usaha,email,alamat,owner_id',
-            'usaha.owner:id,username,nama_lengkap,email,is_active',
+            'usaha.owner:id,id,username,nama_lengkap,email',
+            'plan:id,nama_plan,harga,batas_outlet,durasi_hari',
         ])->findOrFail($id);
-
-        $totalOutlet = \App\Models\Outlet::where('usaha_id', $sub->usaha_id)->count();
-
-        return [
-            'detail_subscription' => [
-                'subscription_id' => $sub->id,
-                'plan_id'         => $sub->plan_id,
-                'start_date'      => $sub->start_date,
-                'status'          => $sub->status,
-                'created_at'      => $sub->created_at,
-                'updated_at'      => $sub->updated_at,
-                'plan'            => $sub->plan,
-            ],
-            'detail_usaha' => [
-                'nama_perusahaan' => $sub->usaha->nama_usaha,
-                'email'           => $sub->usaha->email,
-                'alamat'          => $sub->usaha->alamat,
-                'total_outlet'    => $totalOutlet,
-                'owner'           => [
-                    'nama'     => $sub->usaha->owner->nama_lengkap ?? '-',
-                    'username' => $sub->usaha->owner->username,
-                    'email'    => $sub->usaha->owner->email,
-                ],
-            ],
-        ];
     }
 
     /**
-     * Konfirmasi pembayaran subscription (pending → active)
-     * Dipanggil super admin setelah owner bayar
+     * Konfirmasi pembayaran subscription
+     * Berlaku untuk: new owner (tipe=new) dan upgrade plan (tipe=upgrade)
+     * ID yang dipakai = ID subscription yang status-nya pending
      */
     public function konfirmasiPembayaran(Subscription $sub): Subscription
     {
         if ($sub->status !== 'pending') {
-            throw new \Exception('Subscription ini tidak dalam status pending.');
+            throw new \Exception('Hanya subscription berstatus pending yang bisa dikonfirmasi.');
         }
 
-        DB::transaction(function () use ($sub) {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($sub) {
+
+            // Aktifkan subscription ini
             $sub->update(['status' => 'active']);
 
-            // Approve usaha sekalian
             $usaha = Usaha::find($sub->usaha_id);
-            if ($usaha && $usaha->status === 'pending') {
-                $usaha->update(['status' => 'active', 'approved_at' => now()]);
 
-                // Aktifkan owner
-                if ($usaha->owner_id) {
-                    \App\Models\User::where('id', $usaha->owner_id)->update(['is_active' => true]);
+            if ($sub->tipe === 'new') {
+                // New owner: aktifkan usaha dan owner
+                $usaha?->update(['status' => 'active', 'approved_at' => now()]);
+
+                if ($usaha?->owner_id) {
+                    User::where('id', $usaha->owner_id)->update(['is_active' => true]);
+
+                    NotificationService::notify(
+                        $usaha->owner_id,
+                        'Akun Aktif!',
+                        "Pembayaran dikonfirmasi. Usaha '{$usaha->nama_usaha}' sekarang aktif dengan plan {$sub->plan->nama_plan}.",
+                        'subscription_aktif',
+                        ['usaha_id' => $usaha->id],
+                    );
                 }
+            } elseif ($sub->tipe === 'upgrade') {
+                // Upgrade: nonaktifkan subscription lama yang active
+                Subscription::where('usaha_id', $sub->usaha_id)
+                             ->where('status', 'active')
+                             ->where('id', '!=', $sub->id)
+                             ->update(['status' => 'expired']);
 
-                // Notif ke owner
-                NotificationService::notify(
-                    $usaha->owner_id,
-                    'Pembayaran Dikonfirmasi',
-                    "Pembayaran subscription Plan {$sub->plan->nama_plan} telah dikonfirmasi. Akun Anda sekarang aktif!",
-                    'payment_confirmed',
-                    ['subscription_id' => $sub->id],
-                );
+                if ($usaha?->owner_id) {
+                    NotificationService::notify(
+                        $usaha->owner_id,
+                        'Upgrade Plan Berhasil!',
+                        "Upgrade ke plan {$sub->plan->nama_plan} berhasil. Selamat menikmati fitur baru!",
+                        'upgrade_aktif',
+                        ['usaha_id' => $usaha->id],
+                    );
+                }
             }
 
             ActivityLogService::log(
                 'konfirmasi_pembayaran',
-                "Pembayaran subscription '{$sub->id}' dikonfirmasi",
-                ['subscription_id' => $sub->id, 'usaha_id' => $sub->usaha_id],
+                "Pembayaran subscription [{$sub->tipe}] usaha '{$usaha?->nama_usaha}' dikonfirmasi. Plan: {$sub->plan->nama_plan}",
+                ['subscription_id' => $sub->id, 'tipe' => $sub->tipe],
                 $sub->usaha_id,
             );
         });
 
-        return $sub->fresh(['plan', 'usaha']);
+        return $sub->fresh(['usaha.owner', 'plan']);
     }
 
-    /**
-     * Cancel subscription
-     */
     public function cancel(Subscription $sub, string $alasan): Subscription
     {
+        if ($sub->status === 'cancelled') {
+            throw new \Exception('Subscription sudah dibatalkan sebelumnya.');
+        }
+
         $sub->update(['status' => 'cancelled']);
+
+        $usaha = Usaha::find($sub->usaha_id);
+        if ($usaha?->owner_id) {
+            NotificationService::notify(
+                $usaha->owner_id,
+                'Subscription Dibatalkan',
+                "Subscription plan {$sub->plan->nama_plan} dibatalkan. Alasan: {$alasan}",
+                'subscription_cancelled',
+                ['usaha_id' => $usaha->id],
+            );
+        }
 
         ActivityLogService::log(
             'cancel_subscription',
-            "Subscription '{$sub->id}' dibatalkan. Alasan: {$alasan}",
+            "Subscription usaha '{$usaha?->nama_usaha}' dibatalkan. Alasan: {$alasan}",
             ['subscription_id' => $sub->id, 'alasan' => $alasan],
             $sub->usaha_id,
         );
 
-        return $sub->fresh();
+        return $sub->fresh(['usaha.owner', 'plan']);
     }
 }
