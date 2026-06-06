@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Owner\{
     UsahaController,
     AddonController,
     ApprovalHargaController,
+    ApprovalHargaBahanController,
 };
 use Illuminate\Support\Facades\Route;
 
@@ -91,4 +92,9 @@ Route::middleware(['role:owner', 'check.subscription'])->group(function () {
     Route::get ('approval-harga',              [ApprovalHargaController::class, 'index']);
     Route::post('approval-harga/{id}/approve', [ApprovalHargaController::class, 'approve']);
     Route::post('approval-harga/{id}/reject',  [ApprovalHargaController::class, 'reject']);
+
+    // Routes untuk approval perubahan harga bahan baku oleh outlet
+    Route::get ('approval-harga-bahan',                    [ApprovalHargaBahanController::class, 'index']);
+    Route::post('approval-harga-bahan/{id}/approve',       [ApprovalHargaBahanController::class, 'approve']);
+    Route::post('approval-harga-bahan/{id}/reject',        [ApprovalHargaBahanController::class, 'reject']);
 });

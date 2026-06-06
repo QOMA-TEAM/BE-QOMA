@@ -19,6 +19,7 @@ return new class extends Migration
             $table->decimal('jumlah', 12, 2);
             $table->string('foto_bukti')->nullable();
             $table->text('keterangan')->nullable();
+            $table->enum('status', ['draft', 'final'])->default('draft'); // ← TAMBAHKAN
             $table->timestamps();
 
             $table->foreign('outlet_id')->references('id')->on('outlet')->onDelete('cascade');

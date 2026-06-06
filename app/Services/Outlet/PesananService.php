@@ -352,7 +352,7 @@ class PesananService
         return $pesanan->fresh(['meja', 'details.menu']);
     }
 
-    // Di PesananService — ubah autoExpirePesanan jadi public
+    // ubah autoExpirePesanan jadi public
     public function autoExpirePesananPublic(string $outletId): void
     {
         $this->autoExpirePesanan($outletId);

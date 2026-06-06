@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Outlet\{
     PesananController,
     KeuanganOutletController,
     ApprovalHargaController,
+    ApprovalHargaBahanController,
 };
 use Illuminate\Support\Facades\Route;
 
@@ -60,4 +61,16 @@ Route::middleware('role:outlet')->group(function () {
 
     // List SEMUA pesanan (dengan filter opsional)
     Route::get('pesanan/semua', [PesananController::class, 'semua']);
+
+    // Stock Opname — Draft System
+    Route::get ('stock-opname',                    [BahanOutletController::class, 'opnameIndex']);  // list semua
+    Route::get ('stock-opname/draft',              [BahanOutletController::class, 'draftIndex']);   // list draft
+    Route::post('stock-opname/draft',              [BahanOutletController::class, 'draftStore']);   // buat/update draft
+    Route::put ('stock-opname/draft/{id}',         [BahanOutletController::class, 'draftUpdate']);  // edit draft
+    Route::delete('stock-opname/draft/{id}',       [BahanOutletController::class, 'draftDestroy']); // hapus draft
+    Route::post('stock-opname/draft/{id}/final',   [BahanOutletController::class, 'draftFinalisasi']); // finalisasi
+
+    // Approval Harga Bahan
+    Route::get ('approval-harga-bahan',            [ApprovalHargaBahanController::class, 'index']);
+    Route::post('approval-harga-bahan',            [ApprovalHargaBahanController::class, 'store']);
 });

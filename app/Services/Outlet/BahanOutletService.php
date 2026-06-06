@@ -271,4 +271,176 @@ class BahanOutletService
             'sudah_expired'     => $sudahExpired->values(),
         ];
     }
+
+    /**
+     * Buat draft stock opname (belum fix, bisa di-edit)
+     */
+    public function buatDraftOpname(string $outletId, array $data, ?string $fotoPath = null): StockOpname
+    {
+        // Validasi bahan milik outlet ini
+        $bahan = BahanOutlet::where('outlet_id', $outletId)
+                            ->where('bahan_master_id', $data['bahan_master_id'])
+                            ->firstOrFail();
+
+        // Cek apakah sudah ada draft untuk bahan ini di outlet ini
+        $existingDraft = StockOpname::where('outlet_id', $outletId)
+                                    ->where('bahan_master_id', $data['bahan_master_id'])
+                                    ->where('status', 'draft')
+                                    ->first();
+
+        if ($existingDraft) {
+            // Update draft yang sudah ada
+            if ($fotoPath && $existingDraft->foto_bukti) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($existingDraft->foto_bukti);
+            }
+
+            $existingDraft->update([
+                'tipe'       => $data['tipe'],
+                'jumlah'     => $data['jumlah'],
+                'foto_bukti' => $fotoPath ?? $existingDraft->foto_bukti,
+                'keterangan' => $data['keterangan'] ?? $existingDraft->keterangan,
+            ]);
+
+            return $existingDraft->fresh('bahanMaster');
+        }
+
+        // Buat draft baru — stok BELUM dikurangi
+        return StockOpname::create([
+            'id'              => \Illuminate\Support\Str::uuid(),
+            'outlet_id'       => $outletId,
+            'bahan_master_id' => $data['bahan_master_id'],
+            'tipe'            => $data['tipe'],
+            'jumlah'          => $data['jumlah'],
+            'foto_bukti'      => $fotoPath,
+            'keterangan'      => $data['keterangan'] ?? null,
+            'status'          => 'draft', // ← belum fix
+        ]);
+    }
+
+    /**
+     * Update draft opname yang sudah ada
+     */
+    public function updateDraftOpname(StockOpname $opname, array $data, ?string $fotoPath = null): StockOpname
+    {
+        if ($opname->isFinal()) {
+            throw new \Exception('Stock opname sudah final, tidak bisa diubah.');
+        }
+
+        if ($fotoPath && $opname->foto_bukti) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($opname->foto_bukti);
+        }
+
+        $opname->update([
+            'tipe'       => $data['tipe']       ?? $opname->tipe,
+            'jumlah'     => $data['jumlah']     ?? $opname->jumlah,
+            'foto_bukti' => $fotoPath           ?? $opname->foto_bukti,
+            'keterangan' => $data['keterangan'] ?? $opname->keterangan,
+        ]);
+
+        return $opname->fresh('bahanMaster');
+    }
+
+    /**
+     * Hapus draft opname
+     */
+    public function hapusDraftOpname(StockOpname $opname): void
+    {
+        if ($opname->isFinal()) {
+            throw new \Exception('Stock opname sudah final, tidak bisa dihapus.');
+        }
+
+        if ($opname->foto_bukti) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($opname->foto_bukti);
+        }
+
+        $opname->delete();
+    }
+
+    /**
+     * Finalisasi draft → final
+     * Baru di sini stok dikurangi dan kerugian dicatat
+     */
+    public function finalisasiOpname(StockOpname $opname): StockOpname
+    {
+        if ($opname->isFinal()) {
+            throw new \Exception('Stock opname sudah final sebelumnya.');
+        }
+
+        $bahan = BahanOutlet::where('outlet_id', $opname->outlet_id)
+                            ->where('bahan_master_id', $opname->bahan_master_id)
+                            ->firstOrFail();
+
+        if ($bahan->stok < $opname->jumlah) {
+            throw new \Exception(
+                "Stok tidak cukup untuk finalisasi. Stok saat ini: {$bahan->stok} {$bahan->bahanMaster->satuan}, " .
+                "dibutuhkan: {$opname->jumlah} {$bahan->bahanMaster->satuan}"
+            );
+        }
+
+        return DB::transaction(function () use ($opname, $bahan) {
+
+            // Update status ke final
+            $opname->update(['status' => 'final']);
+
+            // Baru kurangi stok setelah final
+            $bahan->decrement('stok', $opname->jumlah);
+
+            // Catat stock movement
+            StockMovement::create([
+                'id'              => \Illuminate\Support\Str::uuid(),
+                'outlet_id'       => $opname->outlet_id,
+                'bahan_master_id' => $opname->bahan_master_id,
+                'type'            => 'out',
+                'quantity'        => $opname->jumlah,
+                'reference_id'    => $opname->id,
+                'note'            => "Stock opname final [{$opname->tipe}]: {$bahan->bahanMaster->nama} -{$opname->jumlah} {$bahan->bahanMaster->satuan}",
+            ]);
+
+            // Hitung dan catat kerugian
+            $nilaiKerugian = $opname->jumlah * $bahan->bahanMaster->harga_default;
+
+            \App\Models\Kerugian::create([
+                'id'         => \Illuminate\Support\Str::uuid(),
+                'outlet_id'  => $opname->outlet_id,
+                'total_rugi' => $nilaiKerugian,
+                'tanggal'    => now()->toDateString(),
+            ]);
+
+            // Update laporan keuangan
+            $this->laporanService->recalculate($opname->outlet_id, now()->toDateString());
+
+            ActivityLogService::log(
+                'stock_opname_final',
+                "Stock opname FINAL [{$opname->tipe}]: {$bahan->bahanMaster->nama} -{$opname->jumlah} {$bahan->bahanMaster->satuan} (Kerugian: Rp " . number_format($nilaiKerugian) . ")",
+                ['opname_id' => $opname->id, 'tipe' => $opname->tipe, 'jumlah' => $opname->jumlah],
+                null,
+                $opname->outlet_id,
+            );
+
+            // Cek alert stok
+            $alerts = $this->getAlerts($opname->outlet_id);
+            if ($alerts['total_alert'] > 0) {
+                try {
+                    broadcast(new StokMenipis($opname->outlet_id, $alerts))->toOthers();
+                } catch (\Exception $e) {
+                    \Log::warning('Broadcast StokMenipis gagal: ' . $e->getMessage());
+                }
+            }
+
+            return $opname->fresh('bahanMaster');
+        });
+    }
+
+    /**
+     * List draft opname milik outlet
+     */
+    public function getDraftOpname(string $outletId)
+    {
+        return StockOpname::select('id', 'outlet_id', 'bahan_master_id', 'tipe', 'jumlah', 'foto_bukti', 'keterangan', 'status', 'created_at')
+                        ->where('outlet_id', $outletId)
+                        ->where('status', 'draft')
+                        ->with('bahanMaster:id,nama,satuan,harga_default')
+                        ->latest()
+                        ->get();
+    }
 }
