@@ -45,4 +45,5 @@ Route::middleware('role:super_admin')->group(function () {
     Route::get ('subscriptions/{id}',                        [SubscriptionController::class, 'show']);
     Route::post('subscriptions/{id}/konfirmasi-pembayaran',  [SubscriptionController::class, 'konfirmasiPembayaran']);
     Route::post('subscriptions/{id}/cancel',                 [SubscriptionController::class, 'cancel']);
+    Route::post('subscriptions/{id}/tolak',                  [SubscriptionController::class, 'tolak']);
 });

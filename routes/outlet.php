@@ -27,7 +27,9 @@ Route::middleware('role:outlet')->group(function () {
 
     // Pesanan
     Route::get ('pesanan',                                  [PesananController::class, 'index']);
+    Route::get('pesanan/semua',                             [PesananController::class, 'semua']);
     Route::get ('pesanan/{id}',                             [PesananController::class, 'show']);
+    Route::patch('pesanan/{id}/tipe',                       [PesananController::class, 'updateTipe']);
     Route::post('pesanan/{id}/tambah-item',                 [PesananController::class, 'tambahItem']);
     Route::patch('pesanan/{id}/item/{detail_id}/qty',       [PesananController::class, 'updateQty']);
     Route::delete('pesanan/{id}/item/{detail_id}',          [PesananController::class, 'hapusItem']);
@@ -49,8 +51,6 @@ Route::middleware('role:outlet')->group(function () {
     Route::get('keuangan', [KeuanganOutletController::class, 'index']);
 
     
-    // Tipe pesanan
-    Route::patch('pesanan/{id}/tipe', [PesananController::class, 'updateTipe']);
     
     // Approval harga menu
     Route::get ('approval-harga',      [ApprovalHargaController::class, 'index']);
@@ -58,9 +58,6 @@ Route::middleware('role:outlet')->group(function () {
 
     // Activity Log
     Route::get('activity-log', [ActivityLogController::class, 'index']);
-
-    // List SEMUA pesanan (dengan filter opsional)
-    Route::get('pesanan/semua', [PesananController::class, 'semua']);
 
     // Stock Opname — Draft System
     Route::get ('stock-opname',                    [BahanOutletController::class, 'opnameIndex']);  // list semua

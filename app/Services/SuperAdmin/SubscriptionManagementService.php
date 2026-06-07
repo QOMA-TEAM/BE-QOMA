@@ -129,4 +129,41 @@ class SubscriptionManagementService
 
         return $sub->fresh(['usaha.owner', 'plan']);
     }
+
+    public function tolakPengajuan(Subscription $sub, string $alasan): Subscription
+    {
+        if ($sub->status !== 'pending') {
+            throw new \Exception('Hanya subscription berstatus pending yang bisa ditolak.');
+        }
+
+        $sub->update(['status' => 'rejected']);
+
+        $usaha = Usaha::find($sub->usaha_id);
+
+        if ($sub->tipe === 'new') {
+            // Tolak usaha juga
+            $usaha?->update(['status' => 'rejected', 'catatan_admin' => $alasan]);
+        }
+
+        if ($usaha?->owner_id) {
+            NotificationService::notify(
+                $usaha->owner_id,
+                'Pengajuan Ditolak',
+                $sub->tipe === 'new'
+                    ? "Pendaftaran usaha '{$usaha->nama_usaha}' ditolak. Alasan: {$alasan}"
+                    : "Request upgrade plan ditolak. Alasan: {$alasan}",
+                'pengajuan_ditolak',
+                ['usaha_id' => $usaha->id, 'alasan' => $alasan],
+            );
+        }
+
+        ActivityLogService::log(
+            'tolak_pengajuan',
+            "Pengajuan [{$sub->tipe}] usaha '{$usaha?->nama_usaha}' ditolak. Alasan: {$alasan}",
+            ['subscription_id' => $sub->id, 'alasan' => $alasan],
+            $sub->usaha_id,
+        );
+
+        return $sub->fresh(['usaha.owner', 'plan']);
+    }
 }

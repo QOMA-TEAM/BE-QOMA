@@ -78,4 +78,24 @@ class SubscriptionController extends Controller
             'data'    => new SubscriptionDetailResource($sub),
         ]);
     }
+
+    // POST /super-admin/subscriptions/{id}/tolak
+    public function tolak(Request $request, string $id)
+    {
+        $request->validate([
+            'alasan' => 'required|string|min:5|max:500',
+        ]);
+
+        $sub = Subscription::findOrFail($id);
+
+        try {
+            $sub = $this->service->tolakPengajuan($sub, $request->alasan);
+            return response()->json([
+                'message' => 'Pengajuan berhasil ditolak.',
+                'data'    => new SubscriptionDetailResource($sub),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
 }
