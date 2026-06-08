@@ -31,19 +31,6 @@ class MenuOutletController extends Controller
                     ->where('usaha_id', $usahaId)
                     ->where('is_active', true)
 
-                    // tampilkan hanya menu yang available
-                    ->where(function ($q) use ($outletId) {
-
-                        // jika belum ada setting menu_outlet
-                        $q->whereDoesntHave('menuOutlets')
-
-                        // atau menu outlet aktif
-                        ->orWhereHas('menuOutlets', function ($sub) use ($outletId) {
-                            $sub->where('outlet_id', $outletId)
-                                ->where('is_available', true);
-                        });
-                    })
-
                     ->with([
                         'kategori:id,nama',
 
@@ -87,6 +74,8 @@ class MenuOutletController extends Controller
 
             $menuOutlet = $menu->menuOutlets->first();
 
+            $isAvailable = $menuOutlet?->is_available ?? true;
+
             return [
                 'id' => $menu->id,
 
@@ -96,7 +85,7 @@ class MenuOutletController extends Controller
 
                 'kategori_id' => $menu->kategori_id,
 
-                'harga' => (float) (
+                'harga' => (float)(
                     $menuOutlet?->harga
                     ?? $menu->harga_default
                 ),
@@ -107,7 +96,12 @@ class MenuOutletController extends Controller
 
                 'keterangan' => $menu->keterangan,
 
-                'is_available' => $menuOutlet?->is_available ?? true,
+                'is_available' => $isAvailable,
+
+                // tambahan status
+                'status' => $isAvailable
+                    ? 'tersedia'
+                    : 'habis',
 
                 'bahan_baku' => $menu->bahanMasters->map(
                     fn($b) => [
@@ -118,29 +112,13 @@ class MenuOutletController extends Controller
             ];
         });
 
-        $kategoris = KategoriMenu::select(
-                            'id',
-                            'nama'
-                        )
-                        ->where(
-                            'usaha_id',
-                            $usahaId
-                        )
-                        ->orderBy('nama')
-                        ->get();
-
         return response()->json([
             'message' => 'Daftar menu outlet',
-
             'outlet' => [
                 'id' => $outlet->id,
                 'nama_outlet' => $outlet->nama_outlet,
             ],
-
-            'kategoris' => $kategoris,
-
             'data' => $paginated->items(),
-
             'meta' => [
                 'current_page' => $paginated->currentPage(),
                 'per_page' => $paginated->perPage(),
