@@ -38,6 +38,7 @@ Route::middleware('role:outlet')->group(function () {
     Route::post('pesanan/{id}/cancel',                      [PesananController::class, 'cancel']);
 
     // Bahan Baku Outlet
+    Route::get  ('bahan-master',                    [BahanOutletController::class, 'bahanMaster']);
     Route::get  ('bahan-baku',                      [BahanOutletController::class, 'index']);
     Route::post ('bahan-baku',                      [BahanOutletController::class, 'store']);
     Route::patch('bahan-baku/{id}/konfigurasi',     [BahanOutletController::class, 'updateKonfigurasi']);
@@ -47,11 +48,8 @@ Route::middleware('role:outlet')->group(function () {
     // Menu Outlet (edit harga)
     Route::get  ('menu',                    [MenuOutletController::class, 'index']);
     Route::patch('menu/{menu_id}/availability', [MenuOutletController::class, 'updateAvailability']);
-
     Route::get('keuangan', [KeuanganOutletController::class, 'index']);
 
-    
-    
     // Approval harga menu
     Route::get ('approval-harga',      [ApprovalHargaController::class, 'index']);
     Route::post ('approval-harga',     [ApprovalHargaController::class, 'store']);

@@ -6,7 +6,6 @@ use App\Models\{BahanOutlet, StockOpname};
 use App\Services\Outlet\BahanOutletService;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use App\Services\ImageService;
 use App\Http\Resources\Outlet\{BahanOutletResource, StockOpnameResource};
 
@@ -34,6 +33,23 @@ class BahanOutletController extends Controller
                 'Daftar bahan baku'
             )
         );
+    }
+
+    // GET /outlet/bahan-master
+    public function bahanMaster(Request $request)
+    {
+        $outlet = $this->getOutlet();
+        $usahaId = $outlet->usaha_id;
+
+        $query = \App\Models\BahanMaster::where('usaha_id', $usahaId);
+
+        if ($request->search) {
+            $query->where('nama', 'like', "%{$request->search}%");
+        }
+
+        $bahans = $query->orderBy('nama')->paginate($this->getPerPage($request));
+
+        return response()->json($this->paginateResponse($bahans, 'Daftar bahan master'));
     }
 
     // POST /outlet/bahan-baku

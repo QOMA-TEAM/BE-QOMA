@@ -40,15 +40,17 @@ class BahanOutletResource extends JsonResource
             ]),
 
             'batch_terdekat_expired' => $batchTerdekat ? [
-                'sisa'         => (float) $batchTerdekat->remaining_quantity,
-                'expired_date' => $batchTerdekat->expired_date?->format('Y-m-d'),
+                'sisa'          => (float) $batchTerdekat->remaining_quantity,
+                'expired_date'  => $batchTerdekat->expired_date?->format('Y-m-d'),
+                'tanggal_masuk' => $batchTerdekat->created_at->format('Y-m-d'),
             ] : null,
 
             'bahan_master' => $this->whenLoaded('bahanMaster', fn() => [
-                'id'     => $this->bahanMaster->id,
-                'nama'   => $this->bahanMaster->nama,
-                'satuan' => $this->bahanMaster->satuan,
-                'gambar' => $this->bahanMaster->gambar
+                'id'            => $this->bahanMaster->id,
+                'nama'          => $this->bahanMaster->nama,
+                'satuan'        => $this->bahanMaster->satuan,
+                'harga_default' => (float) $this->bahanMaster->harga_default,
+                'gambar'        => $this->bahanMaster->gambar
                                 ? asset('storage/' . $this->bahanMaster->gambar)
                                 : null,
             ]),
