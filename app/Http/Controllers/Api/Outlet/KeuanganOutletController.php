@@ -127,7 +127,7 @@ class KeuanganOutletController extends Controller
                 'waktu'      => $p->updated_at->format('H:i'),
             ]);
 
-        $pengeluaran = Pengeluaran::select('id', 'sumber', 'total', 'tanggal')
+        $pengeluaran = Pengeluaran::select('id', 'sumber', 'total', 'tanggal', 'updated_at')
             ->where('outlet_id', $outletId)
             ->whereBetween('tanggal', [$dari, $sampai])
             ->get()
@@ -137,10 +137,10 @@ class KeuanganOutletController extends Controller
                 'keterangan' => $p->sumber ?? 'Pengeluaran',
                 'nominal'    => (float) $p->total,
                 'tanggal'    => $p->tanggal,
-                'waktu'      => '-',
+                'waktu'      => $p->updated_at ? $p->updated_at->format('H:i') : '-',
             ]);
 
-        $kerugian = Kerugian::select('id', 'total_rugi', 'tanggal')
+        $kerugian = Kerugian::select('id', 'total_rugi', 'tanggal', 'updated_at')
             ->where('outlet_id', $outletId)
             ->whereBetween('tanggal', [$dari, $sampai])
             ->get()
@@ -150,7 +150,7 @@ class KeuanganOutletController extends Controller
                 'keterangan' => 'Kerugian operasional',
                 'nominal'    => (float) $k->total_rugi,
                 'tanggal'    => $k->tanggal,
-                'waktu'      => '-',
+                'waktu'      => $k->updated_at ? $k->updated_at->format('H:i') : '-',
             ]);
 
         return collect($pendapatan)

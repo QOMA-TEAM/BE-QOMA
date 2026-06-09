@@ -100,6 +100,7 @@ class KeuanganController extends Controller
                     'keterangan' => "Pesanan #{$p->id}",
                     'nominal'    => (float) $p->total_harga,
                     'tanggal'    => $p->updated_at->toDateString(),
+                    'waktu'      => $p->updated_at->format('H:i'),
                 ]);
             $result = $result->merge($pendapatan);
         }
@@ -116,6 +117,7 @@ class KeuanganController extends Controller
                     'keterangan' => $p->sumber ?? 'Pengeluaran',
                     'nominal'    => (float) $p->total,
                     'tanggal'    => $p->tanggal,
+                    'waktu'      => $p->updated_at ? $p->updated_at->format('H:i') : '-',
                 ]);
             $result = $result->merge($pengeluaran);
         }
@@ -132,6 +134,7 @@ class KeuanganController extends Controller
                     'keterangan' => 'Kerugian operasional',
                     'nominal'    => (float) $p->total_rugi,
                     'tanggal'    => $p->tanggal,
+                    'waktu'      => $p->updated_at ? $p->updated_at->format('H:i') : '-',
                 ]);
             $result = $result->merge($kerugian);
         }
