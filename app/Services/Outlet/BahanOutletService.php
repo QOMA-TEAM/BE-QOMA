@@ -29,6 +29,12 @@ class BahanOutletService
             );
         }
 
+        if (!empty($filters['satuan']) && $filters['satuan'] !== 'all') {
+            $query->whereHas('bahanMaster', fn($q) =>
+                $q->where('satuan', $filters['satuan'])
+            );
+        }
+
         if (!empty($filters['menipis'])) {
             $query->whereRaw('stok <= stok_minimum');
         }
@@ -581,15 +587,22 @@ class BahanOutletService
                                          ->whereDate('expired_date', '<=', now()->addDays(3))
                                          ->with('bahanMaster:id,nama,satuan')
                                          ->get()
-                                         ->map(fn($m) => [
-                                             'tipe'               => 'mendekati_expired',
-                                             'bahan'              => $m->bahanMaster->nama,
-                                             'satuan'             => $m->bahanMaster->satuan,
-                                             'remaining_quantity' => (float) $m->remaining_quantity,
-                                             'expired_date'       => $m->expired_date->format('Y-m-d'),
-                                             'sisa_hari'          => (int) now()->diffInDays($m->expired_date),
-                                             'pesan'              => "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired dalam " . now()->diffInDays($m->expired_date) . " hari!",
-                                         ]);
+                                         ->map(function ($m) {
+                                             $sisaHari = (int) now()->startOfDay()->diffInDays($m->expired_date->startOfDay());
+                                             $pesan = $sisaHari === 0 
+                                                 ? "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired hari ini!"
+                                                 : "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired dalam {$sisaHari} hari!";
+
+                                             return [
+                                                 'tipe'               => 'mendekati_expired',
+                                                 'bahan'              => $m->bahanMaster->nama,
+                                                 'satuan'             => $m->bahanMaster->satuan,
+                                                 'remaining_quantity' => (float) $m->remaining_quantity,
+                                                 'expired_date'       => $m->expired_date->format('Y-m-d'),
+                                                 'sisa_hari'          => $sisaHari,
+                                                 'pesan'              => $pesan,
+                                             ];
+                                         });
 
         // 3. Batch sudah expired tapi masih ada stok — dari stock_movements
         $sudahExpired = StockMovement::where('outlet_id', $outletId)

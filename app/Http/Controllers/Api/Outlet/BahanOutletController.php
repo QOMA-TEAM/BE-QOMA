@@ -23,7 +23,7 @@ class BahanOutletController extends Controller
     {
         $outletId = $this->getOutletId();
         $bahans   = $this->service->getList($outletId, array_merge(
-            $request->only(['search', 'menipis', 'mendekati_expired', 'sort_by', 'sort_dir']),
+            $request->only(['search', 'satuan', 'menipis', 'mendekati_expired', 'sort_by', 'sort_dir']),
             ['per_page' => $this->getPerPage($request)]
         ));
 
