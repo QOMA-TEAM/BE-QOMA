@@ -44,15 +44,27 @@ class BahanOutletService
     // RESTOCK — FEFO: insert batch baru ke stock_movements
     // ============================================================
 
-    public function tambah(string $outletId, array $data): BahanOutlet
+    public function tambah(string $outletId, array $data)
     {
+        \Log::info("BahanOutletService::tambah called", [
+            'outlet_id' => $outletId,
+            'data' => $data,
+        ]);
+
         $outlet      = \App\Models\Outlet::findOrFail($outletId);
         $bahanMaster = BahanMaster::where('id', $data['bahan_master_id'])
                                   ->where('usaha_id', $outlet->usaha_id)
                                   ->firstOrFail();
 
         $jumlah           = (float) $data['jumlah'];
-        $totalPengeluaran = $jumlah * $bahanMaster->harga_default;
+        $totalPengeluaran = isset($data['total_pengeluaran']) 
+                                ? (float) $data['total_pengeluaran'] 
+                                : ($jumlah * $bahanMaster->harga_default);
+
+        \Log::info("Calculated Pengeluaran", [
+            'totalPengeluaran' => $totalPengeluaran,
+            'harga_default' => $bahanMaster->harga_default,
+        ]);
 
         return DB::transaction(function () use ($outletId, $data, $bahanMaster, $jumlah, $totalPengeluaran) {
 
@@ -112,6 +124,22 @@ class BahanOutletService
                 null,
                 $outletId,
             );
+
+            // 7. Otomatis ajukan perubahan harga jika harga beli berbeda dari harga default
+            $hargaSatuanRestock = $jumlah > 0 ? ($totalPengeluaran / $jumlah) : 0;
+            if ($hargaSatuanRestock > 0 && abs($hargaSatuanRestock - $bahanMaster->harga_default) > 0.01) {
+                try {
+                    app(\App\Services\Owner\BahanOutletApprovalService::class)->ajukanPerubahanHarga(
+                        $bahanOutlet,
+                        $hargaSatuanRestock,
+                        "Terdeteksi perbedaan harga pembelian saat Restock ({$jumlah} {$bahanMaster->satuan} dengan total pengeluaran Rp " . number_format($totalPengeluaran) . ").",
+                        $outletId,
+                        $bahanMaster->usaha_id
+                    );
+                } catch (\Exception $e) {
+                    \Log::info("Auto-approval harga dilewati: " . $e->getMessage());
+                }
+            }
 
             return $bahanOutlet->fresh('bahanMaster');
         });
@@ -604,4 +632,4 @@ class BahanOutletService
             \Log::warning('Broadcast StokMenipis gagal: ' . $e->getMessage());
         }
     }
-}   
+}

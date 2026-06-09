@@ -2,12 +2,16 @@
 namespace App\Services\Owner;
 
 use App\Events\{ApprovalHargaBahanBaru, ApprovalHargaBahanDiproses};
-use App\Models\{BahanMaster, BahanOutlet, BahanOutletApproval};
+use App\Models\{BahanOutlet, BahanOutletApproval};
 use App\Services\ActivityLogService;
 use Illuminate\Support\Str;
+use App\Services\LaporanKeuanganService;
 
 class BahanOutletApprovalService
 {
+    public function __construct(
+        private LaporanKeuanganService $laporanService
+    ) {}
     /**
      * Outlet ajukan perubahan harga bahan baku
      * harga_default di bahan_master BELUM berubah sampai approved
@@ -133,6 +137,60 @@ class BahanOutletApprovalService
         if ($approval->status !== 'pending') {
             throw new \Exception('Approval ini sudah diproses sebelumnya.');
         }
+
+        // --- KOREKSI PENGELUARAN KE KERUGIAN ---
+        // Cari Pengeluaran yang dibuat di waktu yang berdekatan
+        $pengeluaran = \App\Models\Pengeluaran::where('outlet_id', $approval->outlet_id)
+            ->where('bahan_master_id', $approval->bahanOutlet->bahan_master_id)
+            ->where('created_at', '>=', $approval->created_at->subSeconds(60))
+            ->where('created_at', '<=', $approval->created_at->addSeconds(60))
+            ->latest()
+            ->first();
+
+        // Cari StockMovement untuk mengetahui jumlah restock
+        $stockMovement = \App\Models\StockMovement::where('outlet_id', $approval->outlet_id)
+            ->where('bahan_master_id', $approval->bahanOutlet->bahan_master_id)
+            ->where('type', 'in')
+            ->where('created_at', '>=', $approval->created_at->subSeconds(60))
+            ->where('created_at', '<=', $approval->created_at->addSeconds(60))
+            ->latest()
+            ->first();
+
+        if ($pengeluaran && $stockMovement) {
+            $jumlah = $stockMovement->quantity;
+            $selisih = $pengeluaran->total - ($jumlah * $approval->harga_lama);
+
+            if ($selisih > 0) {
+                // Kurangi pengeluaran
+                $pengeluaran->update([
+                    'total' => $pengeluaran->total - $selisih
+                ]);
+
+                // Tambahkan ke kerugian
+                \App\Models\Kerugian::create([
+                    'id'         => Str::uuid(),
+                    'outlet_id'  => $approval->outlet_id,
+                    'total_rugi' => $selisih,
+                    'tanggal'    => $pengeluaran->tanggal->toDateString(),
+                ]);
+
+                \Log::info("Koreksi Kerugian Berhasil", [
+                    'pengeluaran_baru' => $pengeluaran->total,
+                    'kerugian' => $selisih,
+                ]);
+
+                // Recalculate laporan keuangan
+                $this->laporanService->recalculate($approval->outlet_id, $pengeluaran->tanggal->toDateString());
+            } else {
+                \Log::warning("Koreksi Kerugian Gagal: Selisih tidak valid", ['selisih' => $selisih]);
+            }
+        } else {
+            \Log::warning("Koreksi Kerugian Gagal: Pengeluaran atau StockMovement tidak ditemukan", [
+                'pengeluaran' => $pengeluaran ? 'ada' : 'tidak_ada',
+                'stockMovement' => $stockMovement ? 'ada' : 'tidak_ada',
+            ]);
+        }
+        // ----------------------------------------
 
         $approval->update([
             'status'        => 'rejected',
