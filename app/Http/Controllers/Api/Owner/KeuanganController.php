@@ -140,7 +140,10 @@ class KeuanganController extends Controller
         }
 
         // Sort & manual paginate
-        $sorted = $result->sortByDesc('tanggal')->values();
+        $sorted = $result->sortByDesc(function ($item) {
+            $waktu = $item['waktu'] !== '-' ? $item['waktu'] : '00:00';
+            return $item['tanggal'] . ' ' . $waktu;
+        })->values();
         $total  = $sorted->count();
         $items  = $sorted->forPage($page, $perPage)->values();
 
