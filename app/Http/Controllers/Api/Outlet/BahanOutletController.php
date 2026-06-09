@@ -193,19 +193,20 @@ class BahanOutletController extends Controller
         }
     }
 
-    // POST /outlet/stock-opname/draft/{id}/final — finalisasi draft → stok berkurang
-    public function draftFinalisasi(string $id)
+    /**
+     * POST /outlet/stock-opname/simpan
+     * Finalisasi SEMUA draft sekaligus — 1x klik "Simpan"
+     */
+    public function simpan()
     {
         $outletId = $this->getOutletId();
-        $opname   = StockOpname::where('id', $id)
-                               ->where('outlet_id', $outletId)
-                               ->firstOrFail();
 
         try {
-            $opname = $this->service->finalisasiOpname($opname);
+            $hasil = $this->service->finalisasiSemuaDraft($outletId);
+
             return response()->json([
-                'message' => 'Stock opname berhasil difinalisasi. Stok telah dikurangi.',
-                'data'    => new StockOpnameResource($opname),
+                'message' => "✅ {$hasil['total_berhasil']} item berhasil difinalisasi.",
+                'data'    => $hasil,
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);

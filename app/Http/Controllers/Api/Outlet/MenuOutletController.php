@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Outlet;
 
 use App\Http\Controllers\Controller;
-use App\Models\{KategoriMenu, Menu, MenuOutlet};
+use App\Models\{Menu, MenuOutlet};
 use App\Services\ActivityLogService;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;

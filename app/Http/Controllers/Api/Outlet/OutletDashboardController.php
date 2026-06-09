@@ -31,11 +31,17 @@ class OutletDashboardController extends Controller
                     'status_buka' => $outlet->status_buka,
                 ],
                 'keuangan_7_hari' => $laporan['summary'],
+                'grafik_pendapatan' => $laporan['detail'],
                 'alert_summary'   => [
                     'total'            => $alerts['total_alert'],
                     'stok_menipis'     => count($alerts['stok_menipis']),
                     'mendekati_expired'=> count($alerts['mendekati_expired']),
                     'sudah_expired'    => count($alerts['sudah_expired']),
+                ],
+                'alerts' => [
+                    'stok_menipis'      => $alerts['stok_menipis'],
+                    'mendekati_expired' => $alerts['mendekati_expired'],
+                    'sudah_expired'     => $alerts['sudah_expired'],
                 ],
             ],
         ]);

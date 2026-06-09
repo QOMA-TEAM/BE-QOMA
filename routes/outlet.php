@@ -57,13 +57,14 @@ Route::middleware('role:outlet')->group(function () {
     // Activity Log
     Route::get('activity-log', [ActivityLogController::class, 'index']);
 
-    // Stock Opname — Draft System
-    Route::get ('stock-opname',                    [BahanOutletController::class, 'opnameIndex']);  // list semua
-    Route::get ('stock-opname/draft',              [BahanOutletController::class, 'draftIndex']);   // list draft
-    Route::post('stock-opname/draft',              [BahanOutletController::class, 'draftStore']);   // buat/update draft
-    Route::put ('stock-opname/draft/{id}',         [BahanOutletController::class, 'draftUpdate']);  // edit draft
-    Route::delete('stock-opname/draft/{id}',       [BahanOutletController::class, 'draftDestroy']); // hapus draft
-    Route::post('stock-opname/draft/{id}/final',   [BahanOutletController::class, 'draftFinalisasi']); // finalisasi
+    // Stock Opname — Session Based
+    Route::get ('stock-opname/sesi',            [BahanOutletController::class, 'sesiHariIni']);   // info sesi hari ini
+    Route::get ('stock-opname/history',         [BahanOutletController::class, 'historiSesi']);   // history sesi lalu
+    Route::post('stock-opname/item',            [BahanOutletController::class, 'tambahItem']);    // tambah/update draft
+    Route::put ('stock-opname/item/{id}',       [BahanOutletController::class, 'updateItem']);    // edit draft
+    Route::delete('stock-opname/item/{id}',     [BahanOutletController::class, 'hapusItem']);     // hapus draft
+    Route::post('stock-opname/simpan',          [BahanOutletController::class, 'simpan']); // ← 1x klik simpan semua
+    Route::post('stock-opname/sesi/tutup',      [BahanOutletController::class, 'tutupSesi']);     // tutup sesi
 
     // Approval Harga Bahan
     Route::get ('approval-harga-bahan',            [ApprovalHargaBahanController::class, 'index']);
