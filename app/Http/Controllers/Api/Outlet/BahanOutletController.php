@@ -7,7 +7,7 @@ use App\Services\Outlet\BahanOutletService;
 use App\Traits\{HasPagination, OutletAccess};
 use Illuminate\Http\Request;
 use App\Services\ImageService;
-use App\Http\Resources\Outlet\{BahanOutletResource, StockOpnameResource};
+use App\Http\Resources\Outlet\{BahanOutletResource, StockOpnameResource, StockOpnameSessionResource};
 
 class BahanOutletController extends Controller
 {
@@ -104,24 +104,34 @@ class BahanOutletController extends Controller
     }
 
     // ============================================================
-    // STOCK OPNAME — DRAFT SYSTEM
+    // STOCK OPNAME — SESSION SYSTEM
     // ============================================================
 
-    // GET /outlet/stock-opname/draft — list semua draft
-    public function draftIndex()
+    public function sesiHariIni()
     {
         $outletId = $this->getOutletId();
-        $drafts   = $this->service->getDraftOpname($outletId);
+        $sesi = $this->service->getSesiHariIni($outletId);
 
         return response()->json([
-            'message' => 'Daftar draft stock opname',
-            'data'    => StockOpnameResource::collection($drafts),
-            'total'   => $drafts->count(),
+            'message' => 'Info sesi hari ini',
+            'data'    => $sesi ? new StockOpnameSessionResource($sesi) : null,
         ]);
     }
 
-    // POST /outlet/stock-opname/draft — buat atau update draft
-    public function draftStore(Request $request)
+    public function historiSesi(Request $request)
+    {
+        $outletId = $this->getOutletId();
+        $history = $this->service->getListSesi($outletId, $this->getPerPage($request));
+
+        return response()->json(
+            $this->paginateResponse(
+                $history->through(fn($s) => new StockOpnameSessionResource($s)),
+                'Histori sesi stock opname'
+            )
+        );
+    }
+
+    public function tambahItem(Request $request)
     {
         $outletId = $this->getOutletId();
         $request->validate([
@@ -137,9 +147,9 @@ class BahanOutletController extends Controller
             : null;
 
         try {
-            $opname = $this->service->buatDraftOpname($outletId, $request->all(), $fotoPath);
+            $opname = $this->service->buatDraftItem($outletId, $request->all(), $fotoPath);
             return response()->json([
-                'message' => 'Draft stock opname disimpan. Klik "Simpan Final" jika sudah yakin.',
+                'message' => 'Item ditambahkan ke sesi hari ini',
                 'data'    => new StockOpnameResource($opname),
             ], 201);
         } catch (\Exception $e) {
@@ -147,8 +157,7 @@ class BahanOutletController extends Controller
         }
     }
 
-    // PUT /outlet/stock-opname/draft/{id} — edit draft
-    public function draftUpdate(Request $request, string $id)
+    public function updateItem(Request $request, string $id)
     {
         $outletId = $this->getOutletId();
         $request->validate([
@@ -167,9 +176,9 @@ class BahanOutletController extends Controller
             : null;
 
         try {
-            $opname = $this->service->updateDraftOpname($opname, $request->all(), $fotoPath);
+            $opname = $this->service->updateDraftItem($opname, $request->all(), $fotoPath);
             return response()->json([
-                'message' => 'Draft berhasil diupdate',
+                'message' => 'Item berhasil diupdate',
                 'data'    => new StockOpnameResource($opname),
             ]);
         } catch (\Exception $e) {
@@ -177,8 +186,7 @@ class BahanOutletController extends Controller
         }
     }
 
-    // DELETE /outlet/stock-opname/draft/{id} — hapus draft
-    public function draftDestroy(string $id)
+    public function hapusItem(string $id)
     {
         $outletId = $this->getOutletId();
         $opname   = StockOpname::where('id', $id)
@@ -186,8 +194,8 @@ class BahanOutletController extends Controller
                                ->firstOrFail();
 
         try {
-            $this->service->hapusDraftOpname($opname);
-            return response()->json(['message' => 'Draft berhasil dihapus']);
+            $this->service->hapusDraftItem($opname);
+            return response()->json(['message' => 'Item berhasil dihapus']);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -205,7 +213,7 @@ class BahanOutletController extends Controller
             $hasil = $this->service->finalisasiSemuaDraft($outletId);
 
             return response()->json([
-                'message' => "✅ {$hasil['total_berhasil']} item berhasil difinalisasi.",
+                'message' => "✅ {$hasil['total_item']} item berhasil difinalisasi.",
                 'data'    => $hasil,
             ]);
         } catch (\Exception $e) {
@@ -213,27 +221,17 @@ class BahanOutletController extends Controller
         }
     }
 
-    // GET /outlet/stock-opname — list semua (draft + final)
-    public function opnameIndex(Request $request)
+    public function tutupSesi()
     {
         $outletId = $this->getOutletId();
-
-        $query = StockOpname::select('id', 'outlet_id', 'bahan_master_id', 'tipe', 'jumlah', 'foto_bukti', 'keterangan', 'status', 'created_at')
-                            ->where('outlet_id', $outletId)
-                            ->with('bahanMaster:id,nama,satuan')
-                            ->latest();
-
-        if ($request->status) {
-            $query->where('status', $request->status);
+        try {
+            $sesi = $this->service->tutupSesi($outletId);
+            return response()->json([
+                'message' => 'Sesi stock opname hari ini berhasil ditutup',
+                'data'    => new StockOpnameSessionResource($sesi),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        $opnames = $query->paginate($this->getPerPage($request));
-
-        return response()->json(
-            $this->paginateResponse(
-                $opnames->through(fn($o) => new StockOpnameResource($o)),
-                'Daftar stock opname'
-            )
-        );
     }
 }

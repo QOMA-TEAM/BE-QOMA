@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Api\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kerugian;
-use App\Models\LaporanKeuangan;
 use App\Models\Outlet;
 use App\Models\Pengeluaran;
 use App\Models\Pesanan;
-use App\Services\LaporanKeuanganService;
 use App\Traits\HasPagination; 
 use App\Traits\OwnerAccess;
 use Illuminate\Http\Request;
