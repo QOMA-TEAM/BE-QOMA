@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\Public\PesananPublicController;
 
 // Auth
 Route::prefix('auth')->group(base_path('routes/auth.php'));
