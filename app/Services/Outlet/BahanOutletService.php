@@ -292,6 +292,12 @@ class BahanOutletService
                                     'items as total_draft' => fn($q) => $q->where('status', 'draft'),
                                     'items as total_final' => fn($q) => $q->where('status', 'final'),
                                 ])
+                                ->addSelect([
+                                    'total_kerugian' => \App\Models\StockOpname::selectRaw('COALESCE(SUM(stock_opname.jumlah * bahan_master.harga_default), 0)')
+                                        ->join('bahan_master', 'bahan_master.id', '=', 'stock_opname.bahan_master_id')
+                                        ->whereColumn('stock_opname.session_id', 'stock_opname_sessions.id')
+                                        ->where('stock_opname.status', 'final')
+                                ])
                                 ->orderByDesc('tanggal')
                                 ->paginate($perPage);
     }

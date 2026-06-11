@@ -21,6 +21,7 @@ class StockOpnameSessionResource extends JsonResource
             'total_item'  => $this->total_item ?? null,
             'total_draft' => $this->total_draft ?? null,
             'total_final' => $this->total_final ?? null,
+            'total_kerugian' => isset($this->total_kerugian) ? (float) $this->total_kerugian : 0,
 
             // When loaded with items
             'items'       => $this->relationLoaded('items') 
