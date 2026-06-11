@@ -12,6 +12,12 @@ class ActivityLogService
         ?string $usahaId  = null,
         ?string $outletId = null,
     ): void {
+        if (!$usahaId && auth()->check()) {
+            $usahaId = auth()->user()->usaha_id;
+        } elseif (!$usahaId && $outletId) {
+            $usahaId = \App\Models\Outlet::where('id', $outletId)->value('usaha_id');
+        }
+
         ActivityLog::create([
             'id'         => Str::uuid(),
             'user_id'    => auth()->id(),
