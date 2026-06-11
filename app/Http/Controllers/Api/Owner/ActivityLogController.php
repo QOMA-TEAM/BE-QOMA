@@ -22,7 +22,11 @@ class ActivityLogController extends Controller
                             ->latest();
 
         if ($request->outlet_id) {
-            $query->where('outlet_id', $request->outlet_id);
+            if ($request->outlet_id === 'owner') {
+                $query->whereNull('outlet_id');
+            } else {
+                $query->where('outlet_id', $request->outlet_id);
+            }
         }
 
         if ($request->aktivitas) {
