@@ -1,58 +1,572 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# QOMA - QR Order Management Application
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 📖 Tentang Project
 
-## About Laravel
+QOMA (QR Order Management Application) adalah aplikasi SaaS Point of Sale (POS) berbasis web yang dirancang untuk membantu pemilik usaha makanan dan minuman dalam mengelola pemesanan pelanggan, stok bahan baku, keuangan, serta manajemen outlet secara terpusat.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Sistem menggunakan QR Code Ordering sehingga pelanggan dapat melakukan pemesanan langsung dari meja tanpa perlu login. Pesanan akan langsung diterima oleh outlet dan diproses oleh kasir.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+QOMA menerapkan konsep multi-tenant dimana satu owner dapat memiliki banyak outlet sesuai dengan paket subscription yang dipilih.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## 🎯 Tujuan Project
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- Digitalisasi proses pemesanan pelanggan.
+- Mengurangi kesalahan pencatatan pesanan.
+- Mengotomatisasi pengurangan stok bahan baku.
+- Memudahkan monitoring keuangan setiap outlet.
+- Memudahkan owner mengelola banyak cabang dalam satu sistem.
+- Menyediakan sistem subscription untuk model bisnis SaaS.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## 🏗️ Arsitektur Sistem
 
-## Agentic Development
+### Role dalam Sistem
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+1. Pelanggan
+2. Outlet
+3. Owner
+4. Super Admin
 
-```bash
-composer require laravel/boost --dev
+---
 
-php artisan boost:install
+## ⚙️ Teknologi yang Digunakan
+
+### Backend
+
+- Laravel
+- PHP
+- REST API
+- Laravel Sanctum Authentication
+- Laravel Queue
+- Laravel Scheduler
+
+### Database
+
+- Supabase PostgreSQL
+
+### Development Environment
+
+- Laragon
+
+### Storage
+
+- Laravel Storage
+- Supabase Storage (opsional)
+
+### Realtime
+
+- Laravel Event & Broadcasting
+
+---
+
+## 🚀 Fitur Utama
+
+### Landing Page
+
+- Informasi produk
+- Pricing Plan
+- Registrasi Owner
+- Upgrade Subscription
+- Informasi Paket
+
+### Subscription Plan
+
+#### Free Trial
+
+- Maksimal 2 outlet
+- Akses fitur dasar
+
+#### Pro
+
+- Outlet tidak terbatas
+- Semua fitur premium
+
+---
+
+# 👤 Role Pelanggan
+
+Pelanggan tidak perlu membuat akun.
+
+## Alur Pemesanan
+
+1. Scan QR Code meja.
+2. Sistem membuka menu outlet.
+3. Pilih menu.
+4. Tambahkan addon jika tersedia.
+5. Masukkan ke keranjang.
+6. Isi nama dan nomor telepon.
+7. Konfirmasi pesanan.
+8. Sistem membuat order otomatis.
+9. Pelanggan menuju kasir untuk pembayaran.
+
+## Data Pesanan
+
+Setiap pesanan memiliki:
+
+- ID Pesanan
+- Nomor Meja
+- Nama Pelanggan
+- Nomor Telepon
+- Detail Menu
+- Total Harga
+
+---
+
+# 🏪 Role Outlet
+
+Role outlet berfungsi sebagai:
+
+- Kasir
+- Pengelola stok bahan baku
+
+---
+
+## Manajemen Pesanan
+
+### Menerima Pesanan
+
+Pesanan dari pelanggan akan masuk otomatis ke dashboard outlet.
+
+Informasi yang diterima:
+
+- ID Pesanan
+- Nomor Meja
+- Nama Pelanggan
+- Nomor Telepon
+- Detail Pesanan
+
+### Validasi Pesanan
+
+Kasir dapat:
+
+- Menambah menu
+- Mengurangi menu
+- Mengubah jumlah pesanan
+
+Sebelum pembayaran dikonfirmasi.
+
+### Konfirmasi Pembayaran
+
+Setelah pelanggan membayar:
+
+- Status pembayaran dikonfirmasi
+- Pesanan tidak dapat diubah kembali
+- Sistem mengurangi stok bahan baku secara otomatis
+
+---
+
+## Manajemen Meja
+
+- Tambah meja
+- Edit meja
+- Hapus meja
+- Generate QR Code otomatis
+
+Setiap meja memiliki QR Code unik.
+
+---
+
+## Manajemen Stok Bahan Baku
+
+### Penambahan Stok
+
+Outlet dapat menambah stok dari bahan baku yang telah dibuat owner.
+
+Data yang dicatat:
+
+- Bahan Baku
+- Jumlah
+- Tanggal Masuk
+- Tanggal Kadaluarsa
+
+---
+
+### Stock Opname
+
+Digunakan untuk pengurangan stok secara manual.
+
+Alasan pengurangan:
+
+- Busuk
+- Rusak
+- Tidak Layak
+- Hilang
+
+Data opname:
+
+- Bahan Baku
+- Jenis Kerusakan
+- Jumlah
+- Foto Bukti
+
+---
+
+### Notifikasi Stok
+
+Sistem memberikan alert jika:
+
+- Stok < 5
+- Mendekati tanggal kadaluarsa
+
+---
+
+## Manajemen Menu Outlet
+
+Outlet dapat:
+
+- Mengubah harga menu
+- Menyesuaikan harga berdasarkan kondisi wilayah
+
+---
+
+## Operasional Outlet
+
+### Buka/Tutup Toko
+
+Outlet dapat:
+
+- Membuka toko
+- Menutup toko
+
+Ketika toko ditutup:
+
+- Pelanggan tidak dapat memesan
+- Dashboard kasir tidak menerima order baru
+
+---
+
+## Keuangan Outlet
+
+### Pendapatan
+
+Dihitung dari:
+
+- Total transaksi berhasil
+
+### Pengeluaran
+
+Dihitung dari:
+
+- Pembelian bahan baku
+- Penyesuaian stok
+
+### Laba/Rugi
+
+Sistem menghitung:
+
+```
+Keuntungan = Pendapatan - Pengeluaran
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Jika hasil negatif maka ditampilkan sebagai kerugian.
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Activity Log
 
-## Code of Conduct
+Mencatat seluruh aktivitas outlet seperti:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- Login
+- Transaksi
+- Stock Opname
+- Update Stok
+- Perubahan Menu
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# 👑 Role Owner
 
-## License
+Owner merupakan pemilik usaha.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## Dashboard Owner
+
+Menampilkan:
+
+- Total Outlet
+- Total Karyawan
+- Total Pendapatan
+- Total Kerugian
+
+### Grafik Analitik
+
+Menampilkan:
+
+- Grafik Pendapatan
+- Grafik Laba/Rugi
+
+Dengan filter:
+
+- Harian
+- Mingguan
+- Bulanan
+
+---
+
+## Manajemen Outlet
+
+Owner dapat:
+
+- Menambah outlet
+- Mengedit outlet
+- Melihat daftar outlet
+
+Data outlet:
+
+- Nama Outlet
+- Alamat
+- Email
+- Password
+
+---
+
+## Manajemen Menu
+
+Owner membuat master menu.
+
+Data menu:
+
+- Nama Menu
+- Gambar
+- Harga Default
+- Kategori
+- Bahan Baku
+- Deskripsi
+
+Kategori:
+
+- Makanan
+- Minuman
+- Snack
+- Dessert
+- Lainnya
+
+---
+
+## Manajemen Bahan Baku
+
+Owner membuat master bahan baku.
+
+Data:
+
+- Nama
+- Gambar
+- Satuan
+- Harga Default
+
+---
+
+## Keuangan Owner
+
+Owner dapat melihat:
+
+### Ringkasan
+
+- Total Pendapatan
+- Total Pengeluaran
+- Total Keuntungan
+- Total Kerugian
+
+### Filter
+
+- 1 Hari
+- 7 Hari
+- 30 Hari
+
+---
+
+## Subscription
+
+Owner dapat:
+
+- Melihat paket aktif
+- Upgrade paket
+- Memperpanjang paket
+
+---
+
+## Activity Log
+
+Mencatat seluruh aktivitas owner.
+
+---
+
+# 🛡️ Role Super Admin
+
+Super Admin mengelola seluruh sistem SaaS.
+
+---
+
+## Dashboard Super Admin
+
+Menampilkan:
+
+- Total Usaha
+- Total Outlet
+- Total Pendapatan Subscription
+- Monthly Recurring Revenue (MRR)
+
+---
+
+## Analitik MRR
+
+Filter:
+
+- Harian
+- Mingguan
+- Bulanan
+
+---
+
+## Manajemen Subscription
+
+### Plan
+
+CRUD Paket Subscription
+
+Data:
+
+- Nama Paket
+- Harga
+- Batas Outlet
+
+Contoh:
+
+- Free Trial
+- Pro
+
+---
+
+### Pelanggan Subscription
+
+Menampilkan:
+
+- Nama Perusahaan
+- Nama Owner
+- Jenis Subscription
+- Tanggal Mulai
+
+Detail:
+
+#### Subscription
+
+- Subscription ID
+- Plan ID
+- Start Date
+- Created At
+- Updated At
+
+#### Usaha
+
+- Nama Perusahaan
+- Email
+- Alamat
+- Total Outlet
+
+---
+
+## Notifikasi
+
+Super Admin menerima notifikasi ketika:
+
+- Ada owner baru mendaftar
+- Ada subscription baru
+- Ada upgrade subscription
+
+---
+
+## Activity Log
+
+Mencatat aktivitas seluruh sistem.
+
+---
+
+# 📊 Flow Sistem
+
+## Pelanggan
+
+```text
+Scan QR
+   ↓
+Pilih Menu
+   ↓
+Keranjang
+   ↓
+Isi Data Pelanggan
+   ↓
+Konfirmasi Pesanan
+   ↓
+Masuk Dashboard Outlet
+   ↓
+Pembayaran Kasir
+   ↓
+Stok Berkurang Otomatis
+```
+
+---
+
+## Owner
+
+```text
+Registrasi
+   ↓
+Pilih Paket
+   ↓
+Buat Outlet
+   ↓
+Kelola Menu
+   ↓
+Kelola Bahan Baku
+   ↓
+Monitor Keuangan
+```
+
+---
+
+## Struktur Multi Tenant
+
+```text
+Super Admin
+      │
+      ▼
+    Owner
+      │
+ ┌────┴────┐
+ ▼         ▼
+Outlet A  Outlet B
+ │         │
+ ▼         ▼
+Pelanggan Pelanggan
+```
+
+---
+
+# 🔒 Keamanan
+
+- Authentication menggunakan Laravel Sanctum
+- Password Hashing menggunakan Bcrypt
+- Role Based Access Control (RBAC)
+- Activity Logging
+- Validasi Request Laravel
+
+---
+
+# 📈 Future Development
+
+- Realtime Notification
+- Integrasi Payment Gateway
+- Dashboard AI Analytics
+- Prediksi Kebutuhan Stok
+- Mobile Application
+- Export PDF & Excel
+- Multi Bahasa
+
+---
+
+# 👨‍💻 Developer
+
+Project ini dikembangkan sebagai sistem SaaS POS multi-outlet dengan fitur QR Ordering, Inventory Management, Subscription Management, dan Financial Monitoring menggunakan Laravel dan Supabase PostgreSQL.
