@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('no_telp')->nullable();
             $table->decimal('total_harga', 12, 2)->default(0);
             $table->enum('status', ['pending', 'confirmed', 'paid', 'cancelled', 'expired'])
-                ->default('pending');                                    // ← tambah 'expired'
+                ->default('pending');                                    
             $table->enum('tipe_pesanan', ['dine_in', 'take_away'])
                 ->default('dine_in');                                   
             $table->timestamp('expired_at')->nullable();                // ← BARU (10 menit dari created_at)

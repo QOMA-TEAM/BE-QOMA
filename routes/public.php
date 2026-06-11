@@ -19,3 +19,4 @@ Route::get('menu/{id}',  [MenuPublicController::class, 'show']);
 // Pesanan pelanggan
 Route::post('pesanan',      [PesananPublicController::class, 'store']);
 Route::get ('pesanan/{id}', [PesananPublicController::class, 'show']);
+Route::post('/pesanan/{id}/cancel', [PesananPublicController::class, 'cancel']);

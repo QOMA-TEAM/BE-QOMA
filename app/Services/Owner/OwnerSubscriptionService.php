@@ -43,6 +43,7 @@ class OwnerSubscriptionService
                 'harga'        => (float) $sub->plan->harga,
                 'batas_outlet' => $sub->plan->batas_outlet === -1 ? 'Unlimited' : $sub->plan->batas_outlet,
                 'is_lifetime'  => $sub->plan->is_lifetime,
+                'durasi_hari'  => $sub->plan->durasi_hari,
                 'deskripsi'    => $sub->plan->deskripsi,
             ],
             'penggunaan_outlet' => [
@@ -272,7 +273,7 @@ class OwnerSubscriptionService
             ->first();
 
         // Tampilkan semua plan berbayar kecuali yang sedang dipakai
-        return Plan::where('is_lifetime', false)  // bukan Free
+        return Plan::where('is_lifetime', false)
                 ->where('id', '!=', $subSekarang?->plan_id)
                 ->orderBy('harga', 'asc')
                 ->get()
@@ -282,6 +283,7 @@ class OwnerSubscriptionService
                     'harga'        => (float) $p->harga,
                     'batas_outlet' => $p->batas_outlet === -1 ? 'Unlimited' : $p->batas_outlet,
                     'durasi_hari'  => $p->durasi_hari,
+                    'is_lifetime'  => $p->is_lifetime,
                     'deskripsi'    => $p->deskripsi,
                 ])
                 ->toArray();
