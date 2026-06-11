@@ -18,9 +18,6 @@ Route::prefix('owner')->group(base_path('routes/owner.php'));
 // Outlet
 Route::prefix('outlet')->group(base_path('routes/outlet.php'));
 
-// cancel oleh pelanggan
-Route::post('pesanan/{id}/cancel', [PesananPublicController::class, 'cancel']);
-
 // Shared Authenticated Routes
 Route::middleware('role')->prefix('shared')->group(function () {
     // Notifications
