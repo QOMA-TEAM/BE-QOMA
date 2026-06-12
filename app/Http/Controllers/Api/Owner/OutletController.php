@@ -24,11 +24,13 @@ class OutletController extends Controller
     {
         $this->gate($usahaId);
         $request->validate([
-        'nama_outlet'  => 'required|string|max:100',
-        'alamat'       => 'nullable|string',
-        'email_outlet' => 'required|email|unique:users,email', 
-        'username'     => 'required|string|min:4|unique:users,username',
-        'password'     => 'required|string|min:6',
+        'nama_outlet'   => 'required|string|max:100',
+        'alamat'        => 'nullable|string',
+        'email_outlet'  => 'required|email|unique:users,email',
+        'username'      => 'required|string|min:4|unique:users,username',
+        'password'      => 'required|string|min:6',
+        'gambar_icon'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048', 
+        'gambar_header' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048', 
     ]);
 
         try {

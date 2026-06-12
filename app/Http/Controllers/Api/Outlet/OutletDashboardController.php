@@ -68,4 +68,53 @@ class OutletDashboardController extends Controller
             'status_buka' => $outlet->fresh()->status_buka,
         ]);
     }
+
+    // PATCH /outlet/gambar
+    public function updateGambar(Request $request)
+    {
+        $outlet = $this->getOutlet();
+
+        $request->validate([
+            'gambar_icon'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'gambar_header' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        $imageService = app(\App\Services\ImageService::class);
+
+        if ($request->hasFile('gambar_icon')) {
+            $iconPath = $imageService->replace(
+                $request->file('gambar_icon'),
+                $outlet->gambar_icon,
+                "outlet/{$outlet->usaha_id}/icon"
+            );
+            $outlet->update(['gambar_icon' => $iconPath]);
+        }
+
+        if ($request->hasFile('gambar_header')) {
+            $headerPath = $imageService->replace(
+                $request->file('gambar_header'),
+                $outlet->gambar_header,
+                "outlet/{$outlet->usaha_id}/header"
+            );
+            $outlet->update(['gambar_header' => $headerPath]);
+        }
+
+        \App\Services\ActivityLogService::log(
+            'update_gambar_outlet',
+            "Gambar outlet diupdate",
+            [],
+            null,
+            $outlet->id,
+        );
+
+        return response()->json([
+            'message'       => 'Gambar outlet berhasil diupdate',
+            'gambar_icon'   => $outlet->fresh()->gambar_icon
+                                ? asset('storage/' . $outlet->fresh()->gambar_icon)
+                                : null,
+            'gambar_header' => $outlet->fresh()->gambar_header
+                                ? asset('storage/' . $outlet->fresh()->gambar_header)
+                                : null,
+        ]);
+    }
 }

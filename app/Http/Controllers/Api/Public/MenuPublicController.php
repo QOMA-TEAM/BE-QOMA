@@ -149,10 +149,19 @@ class MenuPublicController extends Controller
         return response()->json([
             'message' => 'Daftar menu',
             'data'    => [
-                'outlet'            => [
-                    'id'          => $outlet->id,
-                    'nama_outlet' => $outlet->nama_outlet,
+                'outlet' => [
+                    'id'            => $outlet->id,
+                    'nama_outlet'   => $outlet->nama_outlet,
+
+                    'gambar_icon'   => $outlet->gambar_icon
+                        ? asset('storage/' . $outlet->gambar_icon)
+                        : null,
+
+                    'gambar_header' => $outlet->gambar_header
+                        ? asset('storage/' . $outlet->gambar_header)
+                        : null,
                 ],
+
                 'kategoris'         => $kategoris,
                 'menu_per_kategori' => $menuPerKategori,
                 'total_menu'        => $menus->count(),

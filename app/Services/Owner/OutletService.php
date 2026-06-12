@@ -80,6 +80,25 @@ class OutletService
                 'is_active'    => true,
             ]);
 
+            $iconPath   = isset($data['gambar_icon'])
+                ? app(\App\Services\ImageService::class)->upload($data['gambar_icon'], "outlet/{$usahaId}/icon")
+                : null;
+
+            $headerPath = isset($data['gambar_header'])
+                ? app(\App\Services\ImageService::class)->upload($data['gambar_header'], "outlet/{$usahaId}/header")
+                : null;
+
+            $outlet = Outlet::create([
+                'id'            => Str::uuid(),
+                'usaha_id'      => $usahaId,
+                'nama_outlet'   => $data['nama_outlet'],
+                'alamat'        => $data['alamat'] ?? null,
+                'status_buka'   => true,
+                'email'         => $data['email_outlet'],
+                'gambar_icon'   => $iconPath,    // ← TAMBAHKAN
+                'gambar_header' => $headerPath,  // ← TAMBAHKAN
+            ]);
+
             $this->syncMenuOutlet($outlet->id, $usahaId);
 
             ActivityLogService::log(
@@ -103,10 +122,22 @@ class OutletService
 
     public function update(Outlet $outlet, array $data): Outlet
     {
+        $imageService = app(\App\Services\ImageService::class);
+
+        $iconPath = isset($data['gambar_icon'])
+            ? $imageService->replace($data['gambar_icon'], $outlet->gambar_icon, "outlet/{$outlet->usaha_id}/icon")
+            : $outlet->gambar_icon;
+
+        $headerPath = isset($data['gambar_header'])
+            ? $imageService->replace($data['gambar_header'], $outlet->gambar_header, "outlet/{$outlet->usaha_id}/header")
+            : $outlet->gambar_header;
+
         $outlet->update([
-            'nama_outlet' => $data['nama_outlet'] ?? $outlet->nama_outlet,
-            'alamat'      => $data['alamat']      ?? $outlet->alamat,
-            'email'       => $data['email']       ?? $outlet->email,
+            'nama_outlet'   => $data['nama_outlet']  ?? $outlet->nama_outlet,
+            'alamat'        => $data['alamat']        ?? $outlet->alamat,
+            'email'         => $data['email']         ?? $outlet->email,
+            'gambar_icon'   => $iconPath,
+            'gambar_header' => $headerPath,
         ]);
 
         ActivityLogService::log(

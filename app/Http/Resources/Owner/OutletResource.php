@@ -7,13 +7,20 @@ class OutletResource extends JsonResource
     public function toArray($request): array
     {
         return [
-            'id'          => $this->id,
-            'usaha_id'    => $this->usaha_id,
-            'nama_outlet' => $this->nama_outlet,
-            'alamat'      => $this->alamat,
-            'status_buka' => $this->status_buka,
-            'mejas_count' => $this->whenCounted('mejas'),
-            'users'       => $this->whenLoaded('users', fn() =>
+            'id'            => $this->id,
+            'usaha_id'      => $this->usaha_id,
+            'nama_outlet'   => $this->nama_outlet,
+            'alamat'        => $this->alamat,
+            'email'         => $this->email,
+            'status_buka'   => $this->status_buka,
+            'gambar_icon'   => $this->gambar_icon
+                                ? asset('storage/' . $this->gambar_icon)
+                                : null,
+            'gambar_header' => $this->gambar_header
+                                ? asset('storage/' . $this->gambar_header)
+                                : null,
+            'mejas_count'   => $this->whenCounted('mejas'),
+            'users'         => $this->whenLoaded('users', fn() =>
                 $this->users->map(fn($u) => [
                     'id'        => $u->id,
                     'username'  => $u->username,
@@ -21,5 +28,5 @@ class OutletResource extends JsonResource
                 ])
             ),
         ];
-    }
+}
 }

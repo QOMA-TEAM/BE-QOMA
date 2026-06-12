@@ -19,6 +19,7 @@ Route::middleware('role:outlet')->group(function () {
     // Dashboard & status toko
     Route::get  ('dashboard',      [OutletDashboardController::class, 'index']);
     Route::patch('toggle-status',  [OutletDashboardController::class, 'toggleStatus']);
+    Route::post('gambar',          [OutletDashboardController::class, 'updateGambar']);
 
     // Meja & QR
     Route::get   ('meja',      [MejaController::class, 'index']);

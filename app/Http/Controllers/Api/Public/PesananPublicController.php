@@ -251,6 +251,21 @@ class PesananPublicController extends Controller
             'confirmed' => 'Dikonfirmasi — silakan lakukan pembayaran',
             'paid'      => 'Lunas ✓',
             'cancelled' => 'Dibatalkan',
+            'expired'   => 'Pesanan kedaluwarsa',
+            default     => $pesanan->status,
+        };
+
+        // Timer berhenti kalau bukan pending
+        $timerAktif = $pesanan->status === 'pending';
+        $sisaDetik  = ($timerAktif && $pesanan->expired_at)
+                        ? max(0, now()->diffInSeconds($pesanan->expired_at, false))
+                        : null;
+
+        $statusLabel = match($pesanan->status) {
+            'pending'   => 'Menunggu konfirmasi kasir',
+            'confirmed' => 'Dikonfirmasi — silakan lakukan pembayaran',
+            'paid'      => 'Lunas ✓',
+            'cancelled' => 'Dibatalkan',
             default     => $pesanan->status,
         };
 

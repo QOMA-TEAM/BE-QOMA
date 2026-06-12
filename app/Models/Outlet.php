@@ -8,7 +8,8 @@ class Outlet extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['id', 'usaha_id', 'nama_outlet', 'alamat', 'status_buka', 'email'];
+    protected $fillable = ['id', 'usaha_id', 'nama_outlet', 'alamat', 'status_buka', 'email', 
+                            'gambar_icon', 'gambar_header',];
     protected $casts    = ['status_buka' => 'boolean'];
 
     public function usaha()       { return $this->belongsTo(Usaha::class, 'usaha_id'); }
