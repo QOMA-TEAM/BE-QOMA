@@ -58,6 +58,7 @@ class MenuController extends Controller
             'bahan_baku'                   => 'nullable|array',
             'bahan_baku.*.bahan_master_id' => 'required|exists:bahan_master,id',
             'bahan_baku.*.jumlah_pakai'    => 'required|numeric|min:0.01',
+            'bahan_baku.*.satuan_pakai'       => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
         ]);
 
         // Validasi kategori milik usaha ini
@@ -120,11 +121,22 @@ class MenuController extends Controller
             // Sync bahan baku
             if ($request->bahan_baku) {
                 foreach ($request->bahan_baku as $item) {
+                    $bahan = BahanMaster::find($item['bahan_master_id']);
+
+                    // jumlah_pakai sudah dalam satuan_dasar bahan tersebut
+                    // Owner input dalam satuan yang dia mau, kita simpan dalam satuan dasar
+                    $satuanPakai   = $item['satuan_pakai'] ?? $bahan->satuan_dasar;
+                    $jumlahDasar   = \App\Helpers\SatuanHelper::keSatuanDasar(
+                        (float) $item['jumlah_pakai'],
+                        $satuanPakai
+                    );
+
                     DB::table('menu_bahan')->insert([
                         'id'              => Str::uuid(),
                         'menu_id'         => $menu->id,
                         'bahan_master_id' => $item['bahan_master_id'],
-                        'jumlah_pakai'    => $item['jumlah_pakai'],
+                        'jumlah_pakai'    => $jumlahDasar,    // ← simpan dalam satuan dasar
+                        'satuan_pakai'    => $bahan->satuan_dasar, // ← satuan dasar bahan
                         'created_at'      => now(),
                         'updated_at'      => now(),
                     ]);
@@ -180,6 +192,7 @@ class MenuController extends Controller
             'bahan_baku'                   => 'nullable|array',
             'bahan_baku.*.bahan_master_id' => 'required|exists:bahan_master,id',
             'bahan_baku.*.jumlah_pakai'    => 'required|numeric|min:0.01',
+            'bahan_baku.*.satuan_pakai'       => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
         ]);
         
         // Sebelum update, cek duplikat jika nama diubah

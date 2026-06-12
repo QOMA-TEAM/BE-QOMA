@@ -67,13 +67,23 @@ class BahanMasterController extends Controller
             ? $this->imageService->upload($request->file('gambar'), "bahan-master/{$usahaId}")
             : null;
 
-        $bahan = BahanMaster::create([
-            'id'            => Str::uuid(),
-            'usaha_id'      => $usahaId,
-            'nama'          => $request->nama,
-            'satuan'        => $request->satuan,
-            'harga_default' => $request->harga_default,
-            'gambar'        => $gambarPath,
+        $satuanDasar     = \App\Helpers\SatuanHelper::getSatuanDasar($request->satuan);
+        $konversiKeDasar = match(strtolower($request->satuan)) {
+            'kg'    => 1000,
+            'liter' => 1000,
+            'lusin' => 12,
+            default => 1,
+        };
+
+        BahanMaster::create([
+            'id'               => Str::uuid(),
+            'usaha_id'         => $usahaId,
+            'nama'             => $request->nama,
+            'satuan'           => $request->satuan,
+            'satuan_dasar'     => $satuanDasar,      
+            'konversi_ke_dasar'=> $konversiKeDasar,  
+            'harga_default'    => $request->harga_default,
+            'gambar'           => $gambarPath,
         ]);
 
         ActivityLogService::log(
@@ -131,14 +141,30 @@ class BahanMasterController extends Controller
         $gambarPath = $request->hasFile('gambar')
             ? $this->imageService->replace($request->file('gambar'), $bahan->gambar, "bahan-master/{$usahaId}")
             : $bahan->gambar;
+        
+        $satuanDasar = $bahan->satuan_dasar;
+        $konversiKeDasar = $bahan->konversi_ke_dasar;
+
+        if ($request->filled('satuan')) {
+            $satuanDasar = \App\Helpers\SatuanHelper::getSatuanDasar($request->satuan);
+
+            $konversiKeDasar = match (strtolower($request->satuan)) {
+                'kg'    => 1000,
+                'liter' => 1000,
+                'lusin' => 12,
+                default => 1,
+            };
+        }
 
         $bahan->update([
-            'nama'          => $request->nama          ?? $bahan->nama,
-            'satuan'        => $request->satuan        ?? $bahan->satuan,
-            'harga_default' => $request->harga_default ?? $bahan->harga_default,
-            'gambar'        => $gambarPath,
+            'nama'              => $request->nama ?? $bahan->nama,
+            'satuan'            => $request->satuan ?? $bahan->satuan,
+            'satuan_dasar'      => $satuanDasar,
+            'konversi_ke_dasar' => $konversiKeDasar,
+            'harga_default'     => $request->harga_default ?? $bahan->harga_default,
+            'gambar'            => $gambarPath,
         ]);
-
+        
         ActivityLogService::log(
             'update_bahan_master',
             "Bahan baku '{$bahan->nama}' diupdate",

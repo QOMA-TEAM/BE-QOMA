@@ -50,102 +50,104 @@ class BahanOutletService
     // RESTOCK — FEFO: insert batch baru ke stock_movements
     // ============================================================
 
-    public function tambah(string $outletId, array $data)
+    public function tambah(string $outletId, array $data): BahanOutlet
     {
-        \Log::info("BahanOutletService::tambah called", [
-            'outlet_id' => $outletId,
-            'data' => $data,
-        ]);
-
         $outlet      = \App\Models\Outlet::findOrFail($outletId);
+
         $bahanMaster = BahanMaster::where('id', $data['bahan_master_id'])
-                                  ->where('usaha_id', $outlet->usaha_id)
-                                  ->firstOrFail();
+            ->where('usaha_id', $outlet->usaha_id)
+            ->firstOrFail();
 
-        $jumlah           = (float) $data['jumlah'];
-        $totalPengeluaran = isset($data['total_pengeluaran']) 
-                                ? (float) $data['total_pengeluaran'] 
-                                : ($jumlah * $bahanMaster->harga_default);
+        $jumlahInput = (float) $data['jumlah'];
+        $satuanInput = $data['satuan'] ?? $bahanMaster->satuan;
 
-        \Log::info("Calculated Pengeluaran", [
-            'totalPengeluaran' => $totalPengeluaran,
-            'harga_default' => $bahanMaster->harga_default,
-        ]);
+        // convert ke satuan dasar (gram/ml/pcs)
+        $jumlahDasar = \App\Helpers\SatuanHelper::keSatuanDasar(
+            $jumlahInput,
+            $satuanInput
+        );
 
-        return DB::transaction(function () use ($outletId, $data, $bahanMaster, $jumlah, $totalPengeluaran) {
+        // harga per satuan dasar
+        $hargaPerDasar = (float) $bahanMaster->harga_default / $bahanMaster->konversi_ke_dasar;
+        $totalPengeluaran = $jumlahDasar * $hargaPerDasar;
 
-            // 1. Pastikan row bahan_outlet ada (create jika belum ada)
+        return DB::transaction(function () use (
+            $outletId,
+            $data,
+            $bahanMaster,
+            $jumlahInput,
+            $satuanInput,
+            $jumlahDasar,
+            $totalPengeluaran
+        ) {
+
+            // 1. create / get stok outlet
             $bahanOutlet = BahanOutlet::firstOrCreate(
-                ['outlet_id' => $outletId, 'bahan_master_id' => $bahanMaster->id],
                 [
-                    'id'           => Str::uuid(),
-                    'stok'         => 0,
-                    'stok_minimum' => $data['stok_minimum'] ?? 5,
+                    'outlet_id' => $outletId,
+                    'bahan_master_id' => $bahanMaster->id
+                ],
+                [
+                    'id' => Str::uuid(),
+                    'stok' => 0,
+                    'stok_minimum' => $data['stok_minimum'] ?? 500,
                 ]
             );
 
-            // 2. Tambah total stok
-            $bahanOutlet->increment('stok', $jumlah);
+            // 2. tambah stok (dalam satuan dasar)
+            $bahanOutlet->increment('stok', $jumlahDasar);
 
-            // Update stok_minimum jika dikirim
+            // update stok minimum kalau ada
             if (isset($data['stok_minimum'])) {
-                $bahanOutlet->update(['stok_minimum' => $data['stok_minimum']]);
+                $satuanMinimum = $data['satuan_minimum'] ?? $satuanInput;
+
+                $minimumDasar = \App\Helpers\SatuanHelper::keSatuanDasar(
+                    (float) $data['stok_minimum'],
+                    $satuanMinimum
+                );
+
+                $bahanOutlet->update([
+                    'stok_minimum' => $minimumDasar
+                ]);
             }
 
-            // 3. Insert batch baru ke stock_movements (FEFO)
+            // 3. stock movement (FEFO batch)
             StockMovement::create([
-                'id'                 => Str::uuid(),
-                'outlet_id'          => $outletId,
-                'bahan_master_id'    => $bahanMaster->id,
-                'type'               => 'in',
-                'quantity'           => $jumlah,
-                'remaining_quantity' => $jumlah,              // ← sisa batch = jumlah awal
-                'expired_date'       => $data['tanggal_kadaluarsa'] ?? null,
-                'is_finished'        => false,
-                'note'               => "Restock: {$bahanMaster->nama} +{$jumlah} {$bahanMaster->satuan}" .
-                                        (isset($data['tanggal_kadaluarsa']) ? " (exp: {$data['tanggal_kadaluarsa']})" : ''),
-            ]);
-
-            // 4. Catat pengeluaran pembelian bahan
-            \App\Models\Pengeluaran::create([
-                'id'              => Str::uuid(),
-                'outlet_id'       => $outletId,
+                'id' => Str::uuid(),
+                'outlet_id' => $outletId,
                 'bahan_master_id' => $bahanMaster->id,
-                'sumber'          => "Restock {$bahanMaster->nama} {$jumlah} {$bahanMaster->satuan}",
-                'total'           => $totalPengeluaran,
-                'tanggal'         => now()->toDateString(),
+                'type' => 'in',
+                'quantity' => $jumlahDasar,
+                'remaining_quantity' => $jumlahDasar,
+                'expired_date' => $data['tanggal_kadaluarsa'] ?? null,
+                'is_finished' => false,
+                'note' => "Restock: {$jumlahInput} {$satuanInput} {$bahanMaster->nama} = {$jumlahDasar} {$bahanMaster->satuan_dasar}",
             ]);
 
-            // 5. Update laporan keuangan
+            // 4. pengeluaran
+            \App\Models\Pengeluaran::create([
+                'id' => Str::uuid(),
+                'outlet_id' => $outletId,
+                'bahan_master_id' => $bahanMaster->id,
+                'sumber' => "Restock {$bahanMaster->nama} {$jumlahInput} {$satuanInput}",
+                'total' => $totalPengeluaran,
+                'tanggal' => now()->toDateString(),
+            ]);
+
+            // 5. laporan
             $this->laporanService->recalculate($outletId, now()->toDateString());
 
-            // 6. Cek & broadcast alert
+            // 6. alert stok
             $this->broadcastAlertJikaPerlu($outletId);
 
+            // 7. log
             ActivityLogService::log(
                 'restock_bahan',
-                "Restock {$bahanMaster->nama}: +{$jumlah} {$bahanMaster->satuan}" .
-                (isset($data['tanggal_kadaluarsa']) ? " | expired: {$data['tanggal_kadaluarsa']}" : ''),
-                ['bahan_master_id' => $bahanMaster->id, 'jumlah' => $jumlah],
+                "Restock {$bahanMaster->nama}: +{$jumlahInput} {$satuanInput} ({$jumlahDasar} {$bahanMaster->satuan_dasar})",
+                ['bahan_master_id' => $bahanMaster->id],
                 null,
                 $outletId,
             );
-
-            // 7. Otomatis ajukan perubahan harga jika harga beli berbeda dari harga default
-            $hargaSatuanRestock = $jumlah > 0 ? ($totalPengeluaran / $jumlah) : 0;
-            if ($hargaSatuanRestock > 0 && abs($hargaSatuanRestock - $bahanMaster->harga_default) > 0.01) {
-                try {
-                    app(\App\Services\Owner\BahanOutletApprovalService::class)->ajukanPerubahanHarga(
-                        $bahanOutlet,
-                        $hargaSatuanRestock,
-                        "Terdeteksi perbedaan harga pembelian saat Restock ({$jumlah} {$bahanMaster->satuan} dengan total pengeluaran Rp " . number_format($totalPengeluaran) . ").",
-                        $outletId,
-                        $bahanMaster->usaha_id
-                    );
-                } catch (\Exception $e) {
-                    \Log::info("Auto-approval harga dilewati: " . $e->getMessage());
-                }
-            }
 
             return $bahanOutlet->fresh('bahanMaster');
         });

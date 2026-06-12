@@ -59,9 +59,11 @@ class BahanOutletController extends Controller
         $request->validate([
             'bahan_master_id'    => 'required|exists:bahan_master,id',
             'jumlah'             => 'required|numeric|min:0.01',
+            'satuan'             => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
             'tanggal_masuk'      => 'nullable|date',
             'tanggal_kadaluarsa' => 'nullable|date|after:today',
             'stok_minimum'       => 'nullable|numeric|min:0',
+            'satuan_minimum'     => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
         ]);
 
         try {
