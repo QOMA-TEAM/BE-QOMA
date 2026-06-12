@@ -1,6 +1,5 @@
 <?php
 namespace App\Http\Resources\Outlet;
-use App\Models\StockMovement;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class BahanOutletResource extends JsonResource
