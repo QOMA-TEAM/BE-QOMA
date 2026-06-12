@@ -25,7 +25,7 @@ class MejaService
 
         // Generate QR code sebagai URL string
         // Frontend yang render QR imagenya dari URL ini
-        $qrUrl = config('app.url') . "/menu?outlet_id={$outletId}&meja_id={$mejaId}";
+        $qrUrl = config('app.url') . "/user?outlet_id={$outletId}&meja_id={$mejaId}";
 
         $meja = Meja::create([
             'id'         => $mejaId,

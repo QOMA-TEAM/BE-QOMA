@@ -198,6 +198,8 @@ class LaporanKeuanganService
             'grafik'            => $rows->map(fn($r) => [
                 'tanggal'          => $r->periode,
                 'total_pendapatan' => (float) $r->total_pendapatan,
+                'total_pengeluaran'=> (float) $r->total_pengeluaran,
+                'total_kerugian'   => (float) $r->total_kerugian,
                 'total_keuntungan' => (float) $r->total_keuntungan,
             ]),
         ])->values();
