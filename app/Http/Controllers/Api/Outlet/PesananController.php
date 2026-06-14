@@ -175,6 +175,7 @@ class PesananController extends Controller
                 ->with(['meja:id,nomor_meja', 'details:id,pesanan_id,menu_id,qty,harga', 'details.menu:id,nama'])
                 ->latest();
 
+        // ← TIDAK ADA default exclude — semua status tampil termasuk confirmed
         if ($request->status)       $query->where('status', $request->status);
         if ($request->tipe_pesanan) $query->where('tipe_pesanan', $request->tipe_pesanan);
         if ($request->dari)         $query->whereDate('created_at', '>=', $request->dari);

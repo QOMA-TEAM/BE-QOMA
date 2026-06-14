@@ -34,11 +34,11 @@ class PesananService
                         ->latest();
 
         if (!empty($filters['status'])) {
+            // Kalau ada filter status spesifik (termasuk 'confirmed'), tetap tampilkan
             $query->where('status', $filters['status']);
-        }
-
-        if (empty($filters['status'])) {
-            $query->whereNotIn('status', ['expired']);
+        } else {
+            // ← UBAH: Default dashboard — sembunyikan 'expired' DAN 'confirmed'
+            $query->whereNotIn('status', ['expired', 'confirmed']);
         }
 
         if (!empty($filters['search'])) {
@@ -49,7 +49,7 @@ class PesananService
             });
         }
 
-        return $query->paginate($filters['per_page'] ?? 15);
+        return $query->paginate($filters['per_page'] ?? 10);
     }
 
     public function getDetail(string $pesananId, string $outletId): Pesanan
