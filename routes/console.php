@@ -10,3 +10,5 @@ Artisan::command('inspire', function () {
 
 Schedule::command('subscription:notifikasi-habis')->dailyAt('08:00');
 Schedule::command('subscription:proses-grace-period')->dailyAt('00:01');
+// Jalankan setiap hari jam 00:05 — buffer 5 menit dari tengah malam
+Schedule::command('stock-opname:tutup-sesi-lama')->dailyAt('00:05');

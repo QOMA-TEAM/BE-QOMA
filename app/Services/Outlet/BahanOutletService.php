@@ -254,6 +254,9 @@ class BahanOutletService
     {
         $today = now()->toDateString();
 
+        // ← BARU: tutup otomatis sesi lama yang masih 'open' dari hari sebelumnya
+        $this->autoTutupSesiLama($outletId);
+
         $sesi = StockOpnameSession::where('outlet_id', $outletId)
                                 ->where('tanggal', $today)
                                 ->first();
@@ -275,6 +278,9 @@ class BahanOutletService
      */
     public function getSesiHariIni(string $outletId): ?StockOpnameSession
     {
+        // ← BARU: tutup otomatis sesi lama sebelum cek sesi hari ini
+        $this->autoTutupSesiLama($outletId);
+
         return StockOpnameSession::where('outlet_id', $outletId)
                                 ->where('tanggal', now()->toDateString())
                                 ->with([
@@ -513,9 +519,7 @@ class BahanOutletService
     }
 
     /**
-     * Tutup sesi hari ini
-     * Semua draft yang belum di-final akan otomatis DIHAPUS (bukan di-cancel)
-     * karena dianggap belum fix
+     * Tutup sesi hari ini (dipanggil manual oleh outlet)
      */
     public function tutupSesi(string $outletId): StockOpnameSession
     {
@@ -529,7 +533,32 @@ class BahanOutletService
             throw new \Exception('Sesi sudah ditutup sebelumnya.');
         }
 
-        return DB::transaction(function () use ($sesi, $outletId) {
+        return $this->prosesTutupSesi($sesi);
+    }
+
+    /**
+     * Auto-tutup sesi yang masih 'open' dari hari-hari sebelumnya
+     * Dipanggil setiap kali getAtauBuatSesiHariIni() dijalankan
+     */
+    private function autoTutupSesiLama(string $outletId): void
+    {
+        $sesiLama = StockOpnameSession::where('outlet_id', $outletId)
+                                    ->where('status', 'open')
+                                    ->where('tanggal', '<', now()->toDateString())
+                                    ->get();
+
+        foreach ($sesiLama as $sesi) {
+            $this->prosesTutupSesi($sesi, autoClose: true);
+        }
+    }
+
+    /**
+     * Logic inti penutupan sesi — dipakai manual & auto
+     * Semua draft yang belum di-final akan DIHAPUS
+     */
+    private function prosesTutupSesi(StockOpnameSession $sesi, bool $autoClose = false): StockOpnameSession
+    {
+        return DB::transaction(function () use ($sesi, $autoClose) {
 
             // Hapus semua draft yang belum difinalisasi
             $draftItems = StockOpname::where('session_id', $sesi->id)
@@ -543,19 +572,21 @@ class BahanOutletService
                 $draft->delete();
             }
 
-            // Tutup sesi
             $sesi->update([
                 'status'    => 'closed',
                 'closed_at' => now(),
             ]);
 
+            $jenisTutup = $autoClose ? 'otomatis (ganti hari)' : 'manual';
+
             ActivityLogService::log(
                 'tutup_sesi_opname',
-                "Sesi stock opname {$sesi->tanggal->format('d M Y')} ditutup. " .
-                "Total item final: {$sesi->itemsFinal()->count()}",
-                ['session_id' => $sesi->id],
+                "Sesi stock opname {$sesi->tanggal->format('d M Y')} ditutup {$jenisTutup}. " .
+                "Total item final: {$sesi->itemsFinal()->count()}" .
+                ($draftItems->count() > 0 ? ", {$draftItems->count()} draft dihapus karena tidak disimpan" : ''),
+                ['session_id' => $sesi->id, 'auto' => $autoClose],
                 null,
-                $outletId,
+                $sesi->outlet_id,
             );
 
             return $sesi->fresh(['items.bahanMaster']);
