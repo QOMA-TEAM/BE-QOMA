@@ -92,47 +92,46 @@ class MenuPublicController extends Controller
         // Ambil usaha_id dari outlet untuk filter menu milik usaha ini
         $usahaId = $outlet->usaha_id;
 
-        $query = Menu::where('usaha_id', $usahaId)
-                     ->where('is_active', true)
-                     ->with([
-                         'kategori:id,nama',
-                         'bahanMasters:id,nama,satuan', // info bahan baku
-                     ]);
+        $$menus = Menu::select('id', 'usaha_id', 'kategori_id', 'nama', 'harga_default', 'gambar', 'keterangan')
+             ->where('usaha_id', $usahaId)
+             ->where('is_active', true)
+             ->with([
+                 'kategori:id,nama',
+                 'bahanMasters:id,nama,satuan',
+                 'addons:id,nama,harga', // ← TAMBAHKAN
+                 'menuOutlets' => fn($q) => $q->select('id', 'menu_id', 'outlet_id', 'harga', 'is_available')
+                                               ->where('outlet_id', $request->outlet_id),
+             ])
+             ->when($request->kategori_id, fn($q) => $q->where('kategori_id', $request->kategori_id))
+             ->orderBy('nama')
+             ->get();
 
-        // Filter by kategori
-        if ($request->kategori_id) {
-            $query->where('kategori_id', $request->kategori_id);
-        }
-
-        $menus = $query->orderBy('nama')->get();
-
-        // Inject harga override per outlet
-        $menus = $menus->map(function ($menu) use ($request) {
-            $menuOutlet = MenuOutlet::where('menu_id', $menu->id)
-                                   ->where('outlet_id', $request->outlet_id)
-                                   ->first();
-
-            // Pakai harga override kalau ada, kalau tidak pakai harga_default
-            $harga        = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
-            $isAvailable  = $menuOutlet ? $menuOutlet->is_available : true;
+        $menus = $menus->map(function ($menu) {
+            $menuOutlet  = $menu->menuOutlets->first();
+            $harga       = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
+            $isAvailable = $menuOutlet ? $menuOutlet->is_available : true;
 
             return [
-                'id'          => $menu->id,
-                'nama'        => $menu->nama,
-                'kategori'    => $menu->kategori->nama ?? '-',
-                'kategori_id' => $menu->kategori_id,
-                'harga'       => (float) $harga,
-                'gambar'      => $menu->gambar
-                                    ? asset('storage/' . $menu->gambar)
-                                    : null,
-                'keterangan'  => $menu->keterangan,
-                'is_available'=> $isAvailable,
-                'bahan_baku'  => $menu->bahanMasters->map(fn($b) => [
+                'id'           => $menu->id,
+                'nama'         => $menu->nama,
+                'kategori'     => $menu->kategori->nama ?? '-',
+                'kategori_id'  => $menu->kategori_id,
+                'harga'        => (float) $harga,
+                'gambar'       => $menu->gambar ? asset('storage/' . $menu->gambar) : null,
+                'keterangan'   => $menu->keterangan,
+                'is_available' => $isAvailable,
+                'bahan_baku'   => $menu->bahanMasters->map(fn($b) => [
                     'nama'   => $b->nama,
                     'satuan' => $b->satuan,
                 ]),
+        
+                'addons'       => $menu->addons->map(fn($a) => [
+                    'id'    => $a->id,
+                    'nama'  => $a->nama,
+                    'harga' => (float) $a->harga,
+                ]),
             ];
-        })->filter(fn($m) => $m['is_available'])->values(); // filter yang available saja
+        })->filter(fn($m) => $m['is_available'])->values();
 
         // Kelompokkan per kategori
         $menuPerKategori = $menus->groupBy('kategori')->map(fn($items, $kategori) => [
@@ -165,6 +164,12 @@ class MenuPublicController extends Controller
                 'kategoris'         => $kategoris,
                 'menu_per_kategori' => $menuPerKategori,
                 'total_menu'        => $menus->count(),
+
+            'addons' => $menu->addons->map(fn($a) => [
+                'id'    => $a->id,
+                'nama'  => $a->nama,
+                'harga' => (float) $a->harga,
+            ]),
             ],
         ]);
     }

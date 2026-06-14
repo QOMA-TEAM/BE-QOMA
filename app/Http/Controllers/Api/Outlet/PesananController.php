@@ -15,12 +15,13 @@ class PesananController extends Controller
 
     public function __construct(private PesananService $service) {}
 
-    // GET /outlet/pesanan?status=pending
+    // GET /outlet/pesanan?status=pending&search=siti
     public function index(Request $request)
     {
         $outletId = $this->getOutletId();
         $pesanans = $this->service->getList($outletId, [
             'status'   => $request->status,
+            'search'   => $request->search, 
             'per_page' => $this->getPerPage($request),
         ]);
 
@@ -30,9 +31,7 @@ class PesananController extends Controller
                 'Daftar pesanan'
             )
         );
-
     }
-
     // GET /outlet/pesanan/{id}
    public function show(string $id)
     {
@@ -161,12 +160,10 @@ class PesananController extends Controller
         }
     }
 
-    // GET /outlet/pesanan/semua — semua pesanan (paid, confirmed, pending, dll)
+    // GET /outlet/pesanan/semua?search=...
     public function semua(Request $request)
     {
         $outletId = $this->getOutletId();
-
-        // Auto expire dulu
         $this->service->autoExpirePesananPublic($outletId);
 
         $query = \App\Models\Pesanan::select(
@@ -178,21 +175,17 @@ class PesananController extends Controller
                 ->with(['meja:id,nomor_meja', 'details:id,pesanan_id,menu_id,qty,harga', 'details.menu:id,nama'])
                 ->latest();
 
-        // Filter opsional
-        if ($request->status) {
-            $query->where('status', $request->status);
-        }
+        if ($request->status)       $query->where('status', $request->status);
+        if ($request->tipe_pesanan) $query->where('tipe_pesanan', $request->tipe_pesanan);
+        if ($request->dari)         $query->whereDate('created_at', '>=', $request->dari);
+        if ($request->sampai)       $query->whereDate('created_at', '<=', $request->sampai);
 
-        if ($request->tipe_pesanan) {
-            $query->where('tipe_pesanan', $request->tipe_pesanan);
-        }
-
-        if ($request->dari) {
-            $query->whereDate('created_at', '>=', $request->dari);
-        }
-
-        if ($request->sampai) {
-            $query->whereDate('created_at', '<=', $request->sampai);
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                ->orWhere('nama_pelanggan', 'like', "%{$search}%");
+            });
         }
 
         $pesanans = $query->paginate($this->getPerPage($request));

@@ -18,6 +18,8 @@ class PesananService
      * Ambil list pesanan milik outlet
      * Auto-expire pesanan pending yang sudah lewat 10 menit
      */
+
+    // Update method getList()
     public function getList(string $outletId, array $filters = [])
     {
         $this->autoExpirePesanan($outletId);
@@ -37,6 +39,14 @@ class PesananService
 
         if (empty($filters['status'])) {
             $query->whereNotIn('status', ['expired']);
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                ->orWhere('nama_pelanggan', 'like', "%{$search}%");
+            });
         }
 
         return $query->paginate($filters['per_page'] ?? 15);

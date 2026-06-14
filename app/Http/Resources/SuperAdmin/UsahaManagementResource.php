@@ -9,6 +9,8 @@ class UsahaManagementResource extends JsonResource
         return [
             'id'             => $this->id,
             'nama_usaha'     => $this->nama_usaha,
+            'telp_usaha'      => $this->telp_usaha,
+            'deskripsi_usaha' => $this->deskripsi_usaha,
             'email'          => $this->email,
             'alamat'         => $this->alamat,
             'status'         => $this->status,
@@ -22,6 +24,7 @@ class UsahaManagementResource extends JsonResource
                 'username'     => $this->owner->username,
                 'nama_lengkap' => $this->owner->nama_lengkap,
                 'email'        => $this->owner->email,
+                'no_telp'      => $this->owner->no_telp,
                 'is_active'    => $this->owner->is_active,
             ]),
             'subscription'   => $this->whenLoaded('subscription', fn() =>

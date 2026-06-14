@@ -30,14 +30,22 @@ class RegisterController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'nama_usaha'        => 'required|string|max:100',
-            'alamat'            => 'nullable|string|max:255',
-            'email'             => 'required|email|unique:users,email',
-            'nama_owner'        => 'required|string|max:100',
-            'username'          => 'required|string|min:4|unique:users,username',
-            'password'          => 'required|string|min:6|confirmed',
-            'plan_id'           => 'required|exists:plans,id',
-            'metode_pembayaran' => 'nullable|in:transfer,qris',
+            // Data Owner
+            'nama_owner'          => 'required|string|max:100',  
+            'username'            => 'required|string|min:4|unique:users,username',
+            'email'               => 'required|email|unique:users,email',
+            'no_telp'             => 'required|string|max:20',  
+            'password'            => 'required|string|min:6|confirmed',
+
+            // Data Usaha
+            'nama_usaha'          => 'required|string|max:100',
+            'telp_usaha'          => 'required|string|max:20',   
+            'alamat'              => 'nullable|string|max:255',
+            'deskripsi_usaha'     => 'nullable|string|max:1000', 
+
+            // Plan & Pembayaran
+            'plan_id'             => 'required|exists:plans,id',
+            'metode_pembayaran'   => 'nullable|in:transfer,qris',
         ]);
 
         $plan = Plan::findOrFail($request->plan_id);

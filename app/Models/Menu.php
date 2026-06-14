@@ -17,4 +17,12 @@ class Menu extends Model
     public function usaha()       { return $this->belongsTo(Usaha::class, 'usaha_id'); }
     public function menuOutlets() { return $this->hasMany(MenuOutlet::class, 'menu_id'); }
     public function bahanMasters(){ return $this->belongsToMany(BahanMaster::class, 'menu_bahan', 'menu_id', 'bahan_master_id')->withPivot('jumlah_pakai')->withTimestamps(); }
+
+    public function addons()
+    {
+        return $this->belongsToMany(Addon::class, 'menu_addon', 'menu_id', 'addon_id')
+                    ->withTimestamps();
+    }
 }
+
+

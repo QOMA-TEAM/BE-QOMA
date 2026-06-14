@@ -10,8 +10,9 @@ class User extends Authenticatable implements JWTSubject
     public $incrementing = false;
 
     protected $fillable = [
-        'id', 'role_id', 'usaha_id', 'outlet_id',
-        'username', 'nama_lengkap', 'email', 'password', 'is_active',
+        'id', 'role_id', 'usaha_id', 'outlet_id', 'deskripsi_usaha',
+        'username', 'nama_lengkap', 'email', 'password', 'is_active','telp_usaha',
+        'status', 'catatan_admin', 'no_telp', 'approved_at', 'rejected_at',
     ];
     protected $hidden = ['password'];
     protected $casts  = ['is_active' => 'boolean'];

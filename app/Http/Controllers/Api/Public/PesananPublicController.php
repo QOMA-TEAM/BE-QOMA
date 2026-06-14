@@ -105,13 +105,25 @@ class PesananPublicController extends Controller
             if (!empty($item['addons'])) {
                 foreach ($item['addons'] as $addonItem) {
                     $addon = Addon::where('id', $addonItem['addon_id'])
-                                  ->where('usaha_id', $usahaId)
-                                  ->first();
+                                ->where('usaha_id', $usahaId)
+                                ->first();
 
                     if (!$addon) {
                         return response()->json([
                             'message' => "Addon tidak valid atau bukan milik usaha ini.",
                             'code'    => 'ADDON_NOT_VALID',
+                        ], 422);
+                    }
+
+                    $addonTerdaftar = DB::table('menu_addon')
+                                        ->where('menu_id', $menu->id)
+                                        ->where('addon_id', $addon->id)
+                                        ->exists();
+
+                    if (!$addonTerdaftar) {
+                        return response()->json([
+                            'message' => "Addon '{$addon->nama}' tidak tersedia untuk menu '{$menu->nama}'.",
+                            'code'    => 'ADDON_NOT_FOR_MENU',
                         ], 422);
                     }
 

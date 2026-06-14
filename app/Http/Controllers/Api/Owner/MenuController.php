@@ -23,8 +23,8 @@ class MenuController extends Controller
         $usahaId = $this->getUsahaId();
 
         $query = Menu::where('usaha_id', $usahaId)
-                     ->with(['kategori:id,nama', 'bahanMasters:id,nama,satuan'])
-                     ->withCount('menuOutlets');
+                    ->with(['kategori:id,nama', 'bahanMasters:id,nama,satuan', 'addons:id,nama,harga']) 
+                    ->withCount('menuOutlets');
 
         if ($request->kategori_id) {
             $query->where('kategori_id', $request->kategori_id);
@@ -49,16 +49,17 @@ class MenuController extends Controller
         $usahaId = $this->getUsahaId();
 
         $request->validate([
-            'nama'                         => 'required|string|max:150',
-            'kategori_id'                  => 'required|exists:kategori_menu,id',
-            'harga_default'                => 'required|numeric|min:1',
-            'keterangan'                   => 'nullable|string|max:500',
-            'is_active'                    => 'nullable|boolean',
-            'gambar'                       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'bahan_baku'                   => 'nullable|array',
-            'bahan_baku.*.bahan_master_id' => 'required|exists:bahan_master,id',
-            'bahan_baku.*.jumlah_pakai'    => 'required|numeric|min:0.01',
-            'bahan_baku.*.satuan_pakai'       => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
+            'nama'                          => 'required|string|max:150',
+            'kategori_id'                   => 'required|exists:kategori_menu,id',
+            'harga_default'                 => 'required|numeric|min:1',
+            'keterangan'                    => 'nullable|string|max:500',
+            'is_active'                     => 'nullable|boolean',
+            'gambar'                        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'bahan_baku'                    => 'nullable|array',
+            'bahan_baku.*.bahan_master_id'  => 'required|exists:bahan_master,id',
+            'bahan_baku.*.jumlah_pakai'     => 'required|numeric|min:0.01',
+            'addon_ids'                     => 'nullable|array',       // ← TAMBAHKAN
+            'addon_ids.*'                   => 'string|exists:addon,id', // ← TAMBAHKAN
         ]);
 
         // Validasi kategori milik usaha ini
@@ -86,7 +87,20 @@ class MenuController extends Controller
             }
         }
 
-        // ← FIX: definisikan $duplikat sebelum dipakai
+        // ← BARU: Validasi addon milik usaha ini
+        if ($request->addon_ids) {
+            $validAddonCount = \App\Models\Addon::whereIn('id', $request->addon_ids)
+                                                ->where('usaha_id', $usahaId)
+                                                ->count();
+
+            if ($validAddonCount !== count($request->addon_ids)) {
+                return response()->json([
+                    'message' => 'Satu atau lebih addon tidak valid atau bukan milik usaha Anda.',
+                ], 422);
+            }
+        }
+
+        // Cek duplikat
         $duplikat = Menu::where('usaha_id', $usahaId)
                         ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
                         ->exists();
@@ -100,13 +114,10 @@ class MenuController extends Controller
 
         return DB::transaction(function () use ($request, $usahaId) {
 
-            // Upload gambar
             $gambarPath = $request->hasFile('gambar')
                 ? $this->imageService->upload($request->file('gambar'), "menu/{$usahaId}")
                 : null;
-            
 
-            // Buat menu
             $menu = Menu::create([
                 'id'            => Str::uuid(),
                 'usaha_id'      => $usahaId,
@@ -121,26 +132,20 @@ class MenuController extends Controller
             // Sync bahan baku
             if ($request->bahan_baku) {
                 foreach ($request->bahan_baku as $item) {
-                    $bahan = BahanMaster::find($item['bahan_master_id']);
-
-                    // jumlah_pakai sudah dalam satuan_dasar bahan tersebut
-                    // Owner input dalam satuan yang dia mau, kita simpan dalam satuan dasar
-                    $satuanPakai   = $item['satuan_pakai'] ?? $bahan->satuan_dasar;
-                    $jumlahDasar   = \App\Helpers\SatuanHelper::keSatuanDasar(
-                        (float) $item['jumlah_pakai'],
-                        $satuanPakai
-                    );
-
                     DB::table('menu_bahan')->insert([
                         'id'              => Str::uuid(),
                         'menu_id'         => $menu->id,
                         'bahan_master_id' => $item['bahan_master_id'],
-                        'jumlah_pakai'    => $jumlahDasar,    // ← simpan dalam satuan dasar
-                        'satuan_pakai'    => $bahan->satuan_dasar, // ← satuan dasar bahan
+                        'jumlah_pakai'    => $item['jumlah_pakai'],
                         'created_at'      => now(),
                         'updated_at'      => now(),
                     ]);
                 }
+            }
+
+            // ← BARU: Sync addon ke menu
+            if ($request->addon_ids) {
+                $menu->addons()->sync($request->addon_ids);
             }
 
             // Auto sync ke semua outlet usaha ini
@@ -153,14 +158,15 @@ class MenuController extends Controller
 
             ActivityLogService::log(
                 'create_menu',
-                "Menu '{$menu->nama}' (Rp " . number_format($menu->harga_default) . ") dibuat",
+                "Menu '{$menu->nama}' (Rp " . number_format($menu->harga_default) . ") dibuat" .
+                ($request->addon_ids ? " dengan " . count($request->addon_ids) . " addon" : ''),
                 ['menu_id' => $menu->id, 'nama' => $menu->nama],
                 $usahaId,
             );
 
             return response()->json([
                 'message' => 'Menu berhasil dibuat dan sudah tersebar ke semua outlet',
-                'data'    => $menu->load(['kategori', 'bahanMasters', 'menuOutlets.outlet']),
+                'data'    => $menu->load(['kategori', 'bahanMasters', 'addons', 'menuOutlets.outlet']),
             ], 201);
         });
     }
@@ -172,7 +178,7 @@ class MenuController extends Controller
 
         return response()->json([
             'message' => 'Detail menu',
-            'data'    => $menu->load(['kategori', 'bahanMasters', 'menuOutlets.outlet']),
+            'data'    => $menu->load(['kategori', 'bahanMasters', 'addons', 'menuOutlets.outlet']), 
         ]);
     }
 
