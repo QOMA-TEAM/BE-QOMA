@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Outlet\BahanOutletService;
 use App\Services\LaporanKeuanganService;
 use App\Traits\OutletAccess;
+use Illuminate\Http\Request;
 
 class OutletDashboardController extends Controller
 {
@@ -29,6 +30,9 @@ class OutletDashboardController extends Controller
                     'id'          => $outlet->id,
                     'nama_outlet' => $outlet->nama_outlet,
                     'status_buka' => $outlet->status_buka,
+                    'gambar_icon'   => $outlet->gambar_icon ? asset('storage/' . $outlet->gambar_icon) : null,
+                    'gambar_header' => $outlet->gambar_header ? asset('storage/' . $outlet->gambar_header) : null,
+
                 ],
                 'keuangan_7_hari' => $laporan['summary'],
                 'grafik_pendapatan' => $laporan['detail'],

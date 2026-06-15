@@ -69,7 +69,7 @@ class BahanOutletService
 
         // harga per satuan dasar
         $hargaPerDasar = (float) $bahanMaster->harga_default / $bahanMaster->konversi_ke_dasar;
-        $totalPengeluaran = $jumlahDasar * $hargaPerDasar;
+        $totalPengeluaran = isset($data['total_pengeluaran']) ? (float) $data['total_pengeluaran'] : ($jumlahDasar * $hargaPerDasar);
 
         return DB::transaction(function () use (
             $outletId,
@@ -554,22 +554,66 @@ class BahanOutletService
 
     /**
      * Logic inti penutupan sesi — dipakai manual & auto
-     * Semua draft yang belum di-final akan DIHAPUS
+     * Draft yang belum final akan AUTO-DISIMPAN (finalisasi), bukan dihapus
      */
     private function prosesTutupSesi(StockOpnameSession $sesi, bool $autoClose = false): StockOpnameSession
     {
         return DB::transaction(function () use ($sesi, $autoClose) {
 
-            // Hapus semua draft yang belum difinalisasi
             $draftItems = StockOpname::where('session_id', $sesi->id)
                                     ->where('status', 'draft')
+                                    ->with('bahanMaster')
                                     ->get();
 
-            foreach ($draftItems as $draft) {
-                if ($draft->foto_bukti) {
-                    \Illuminate\Support\Facades\Storage::disk('public')->delete($draft->foto_bukti);
+            $totalFinalized = 0;
+            $totalGagal     = 0;
+            $totalKerugian  = 0;
+
+            foreach ($draftItems as $item) {
+                $bahanOutlet = BahanOutlet::where('outlet_id', $sesi->outlet_id)
+                                        ->where('bahan_master_id', $item->bahan_master_id)
+                                        ->with('bahanMaster')
+                                        ->first();
+
+                // Kalau bahan tidak ditemukan atau stok tidak cukup → tidak bisa diselamatkan, hapus
+                if (!$bahanOutlet || (float) $bahanOutlet->stok < (float) $item->jumlah) {
+                    if ($item->foto_bukti) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($item->foto_bukti);
+                    }
+                    $item->delete();
+                    $totalGagal++;
+                    continue;
                 }
-                $draft->delete();
+
+                // Finalisasi otomatis — sama seperti klik "Simpan"
+                $item->update([
+                    'status'       => 'final',
+                    'finalized_at' => now(),
+                ]);
+
+                $this->kurangiStokFEFO(
+                    $sesi->outlet_id,
+                    $item->bahan_master_id,
+                    (float) $item->jumlah,
+                    $item->id,
+                    "Opname [{$item->tipe}]: {$bahanOutlet->bahanMaster->nama} (auto-simpan saat tutup sesi)"
+                );
+
+                $nilaiKerugian = (float) $item->jumlah * (float) $bahanOutlet->bahanMaster->harga_default;
+                $totalKerugian += $nilaiKerugian;
+
+                \App\Models\Kerugian::create([
+                    'id'         => \Illuminate\Support\Str::uuid(),
+                    'outlet_id'  => $sesi->outlet_id,
+                    'total_rugi' => $nilaiKerugian,
+                    'tanggal'    => now()->toDateString(),
+                ]);
+
+                $totalFinalized++;
+            }
+
+            if ($totalFinalized > 0) {
+                $this->laporanService->recalculate($sesi->outlet_id, now()->toDateString());
             }
 
             $sesi->update([
@@ -579,12 +623,23 @@ class BahanOutletService
 
             $jenisTutup = $autoClose ? 'otomatis (ganti hari)' : 'manual';
 
+            $pesanLog = "Sesi stock opname {$sesi->tanggal->format('d M Y')} ditutup {$jenisTutup}.";
+            if ($totalFinalized > 0) {
+                $pesanLog .= " {$totalFinalized} draft otomatis disimpan (Kerugian: Rp " . number_format($totalKerugian) . ").";
+            }
+            if ($totalGagal > 0) {
+                $pesanLog .= " {$totalGagal} draft dihapus karena bahan tidak ditemukan/stok tidak cukup.";
+            }
+
             ActivityLogService::log(
                 'tutup_sesi_opname',
-                "Sesi stock opname {$sesi->tanggal->format('d M Y')} ditutup {$jenisTutup}. " .
-                "Total item final: {$sesi->itemsFinal()->count()}" .
-                ($draftItems->count() > 0 ? ", {$draftItems->count()} draft dihapus karena tidak disimpan" : ''),
-                ['session_id' => $sesi->id, 'auto' => $autoClose],
+                $pesanLog,
+                [
+                    'session_id'      => $sesi->id,
+                    'auto'            => $autoClose,
+                    'total_finalized' => $totalFinalized,
+                    'total_gagal'     => $totalGagal,
+                ],
                 null,
                 $sesi->outlet_id,
             );
@@ -631,7 +686,6 @@ class BahanOutletService
                                              $pesan = $sisaHari === 0 
                                                  ? "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired hari ini!"
                                                  : "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired dalam {$sisaHari} hari!";
-
                                              return [
                                                  'tipe'               => 'mendekati_expired',
                                                  'bahan'              => $m->bahanMaster->nama,
@@ -658,7 +712,7 @@ class BahanOutletService
                                          'satuan'             => $m->bahanMaster->satuan,
                                          'remaining_quantity' => (float) $m->remaining_quantity,
                                          'expired_date'       => $m->expired_date->format('Y-m-d'),
-                                         'pesan'              => "⚠️ {$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} EXPIRED sejak {$m->expired_date->format('d M Y')}!",
+                                         'pesan'              => "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} EXPIRED sejak {$m->expired_date->format('d M Y')}!",
                                      ]);
 
         return [

@@ -63,6 +63,17 @@ class BahanOutletResource extends JsonResource
                                         && $b->expired_date->diffInDays(now()) <= 3,
             ]),
 
+            
+            'batch_terdekat_expired' => $batches->first() ? [
+                'sisa'               => (float) $batches->first()->remaining_quantity,
+                'expired_date'       => $batches->first()->expired_date?->format('Y-m-d'),
+                'tanggal_masuk'      => $batches->first()->created_at->format('Y-m-d'),
+            ] : null,
+
+            'is_sudah_expired'       => $batches->first() && $batches->first()->expired_date && $batches->first()->expired_date->isPast(),
+            'is_mendekati_expired'   => $batches->first() && $batches->first()->expired_date && !$batches->first()->expired_date->isPast() && $batches->first()->expired_date->diffInDays(now()) <= 3,
+
+
             'bahan_master' => $this->whenLoaded('bahanMaster', fn() => [
                 'id'                => $this->bahanMaster->id,
                 'nama'              => $this->bahanMaster->nama,

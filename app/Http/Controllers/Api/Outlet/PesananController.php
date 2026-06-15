@@ -52,8 +52,12 @@ class PesananController extends Controller
         $outletId = $this->getOutletId();
         $request->validate([
             'items'           => 'required|array|min:1',
-            'items.*.menu_id' => 'required|exists:menu,id',
-            'items.*.qty'     => 'required|integer|min:1',
+            'items.*.menu_id'           => 'required|exists:menu,id',
+            'items.*.qty'               => 'required|integer|min:1',
+            'items.*.addons'            => 'nullable|array',
+            'items.*.addons.*.addon_id' => 'required|string|exists:addon,id',
+            'items.*.addons.*.qty'      => 'required|integer|min:1',
+
         ]);
 
         $pesanan = Pesanan::where('id', $id)->where('outlet_id', $outletId)->firstOrFail();

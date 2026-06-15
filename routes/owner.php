@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\Owner\{
     AddonController,
     ApprovalHargaController,
     ApprovalHargaBahanController,
+    StockOpnameController,
+
 };
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +53,8 @@ Route::middleware(['role:owner', 'check.subscription'])->group(function () {
     Route::get('activity-log',           [ActivityLogController::class, 'index']);
     Route::get('keuangan',               [KeuanganController::class, 'index']);
     Route::get('keuangan/list',          [KeuanganController::class, 'listTransaksi']);
+    Route::get('stock-opname',           [StockOpnameController::class, 'index']);
+
 
     // Outlet
     Route::get   ('outlet',                                     [OutletController::class, 'myOutlets']);

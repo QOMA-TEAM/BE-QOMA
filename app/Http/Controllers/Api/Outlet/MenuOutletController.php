@@ -35,6 +35,8 @@ class MenuOutletController extends Controller
                         'kategori:id,nama',
 
                         'bahanMasters:id,nama,satuan',
+                        'addons:id,nama,harga',
+
 
                         'menuOutlets' => fn($q) =>
                             $q->select(
@@ -109,6 +111,13 @@ class MenuOutletController extends Controller
                         'satuan' => $b->satuan,
                     ]
                 ),
+                
+                'addons' => $menu->addons->map(fn($a) => [
+                    'id'    => $a->id,
+                    'nama'  => $a->nama,
+                    'harga' => (float) $a->harga,
+                ]),
+
             ];
         });
 
