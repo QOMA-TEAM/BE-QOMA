@@ -33,13 +33,13 @@ class PesananService
                         ])
                         ->latest();
 
-        if (!empty($filters['status'])) {
-            // Kalau ada filter status spesifik (termasuk 'confirmed'), tetap tampilkan
-            $query->where('status', $filters['status']);
-        } else {
-            // ← UBAH: Default dashboard — sembunyikan 'expired' DAN 'confirmed'
-            $query->whereNotIn('status', ['expired', 'confirmed']);
-        }
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
+                    // Kalau ada filter status spesifik (termasuk 'confirmed'), tetap tampilkan
+                    $query->where('status', $filters['status']);
+                } elseif (empty($filters['status'])) {
+                    // ← UBAH: Default dashboard — sembunyikan 'expired' DAN 'confirmed'
+                    $query->whereNotIn('status', ['expired', 'confirmed']);
+                }
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -121,7 +121,8 @@ class PesananService
 
         broadcast(new PesananDiupdate($pesanan->fresh(), 'konfirmasi'))->toOthers();
 
-        return $pesanan->fresh(['meja', 'details.menu']);
+        return $pesanan->fresh(['meja', 'details.menu', 'details.addons.addon']);
+
     }
 
     /**
@@ -155,7 +156,8 @@ class PesananService
 
         broadcast(new PesananDiupdate($pesanan->fresh(), 'update_tipe'))->toOthers();
 
-        return $pesanan->fresh(['meja', 'details.menu']);
+        return $pesanan->fresh(['meja', 'details.menu', 'details.addons.addon']);
+
     }
 
     /**
@@ -253,7 +255,7 @@ class PesananService
 
             broadcast(new PesananDiupdate($pesanan->fresh(), 'bayar'))->toOthers();
 
-            return $pesanan->fresh(['meja', 'details.menu', 'pembayaran']);
+            return $pesanan->fresh(['meja', 'details.menu', 'details.addons.addon', 'pembayaran']);
         });
     }
 
@@ -283,12 +285,12 @@ class PesananService
                                         ->first();
                 $harga = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
 
-                $existing = PesananDetail::where('pesanan_id', $pesanan->id)
-                                         ->where('menu_id', $menu->id)
-                                         ->first();
-
-                if ($existing) {
-                    $existing->update(['qty' => $existing->qty + $item['qty']]);
+                $existing = null;
+                if (empty($item['addons'])) {
+                    $existing = PesananDetail::where('pesanan_id', $pesanan->id)
+                                             ->where('menu_id', $menu->id)
+                                             ->doesntHave('addons')
+                                             ->first();
                 } else {
                     PesananDetail::create([
                         'id'         => Str::uuid(),
@@ -297,6 +299,26 @@ class PesananService
                         'qty'        => $item['qty'],
                         'harga'      => $harga,
                     ]);
+
+                                        $detail = PesananDetail::create([
+                        'id'         => Str::uuid(),
+                        'pesanan_id' => $pesanan->id,
+                        'menu_id'    => $menu->id,
+                        'qty'        => $item['qty'],
+                        'harga'      => $harga,
+                    ]);
+
+                    if (!empty($item['addons'])) {
+                        foreach ($item['addons'] as $addon) {
+                            \App\Models\PesananAddon::create([
+                                'id'                => Str::uuid(),
+                                'pesanan_detail_id' => $detail->id,
+                                'addon_id'          => $addon['addon_id'],
+                                'qty'               => $addon['qty'],
+                            ]);
+                        }
+                    }
+
                 }
             }
             $this->recalculateTotal($pesanan);
@@ -304,7 +326,7 @@ class PesananService
 
         broadcast(new PesananDiupdate($pesanan->fresh(), 'edit_item'))->toOthers();
 
-        return $pesanan->fresh(['meja', 'details.menu', 'pembayaran']);
+        return $pesanan->fresh(['meja', 'details.menu', 'details.addons.addon', 'pembayaran']);
     }
 
     /**
@@ -330,7 +352,8 @@ class PesananService
 
         broadcast(new PesananDiupdate($pesanan->fresh(), 'edit_item'))->toOthers();
 
-        return $pesanan->fresh(['meja', 'details.menu']);
+        return $pesanan->fresh(['meja', 'details.menu', 'details.addons.addon']);
+
     }
 
     /**
@@ -360,7 +383,8 @@ class PesananService
         $this->recalculateTotal($pesanan);
         broadcast(new PesananDiupdate($pesanan->fresh(), 'edit_item'))->toOthers();
 
-        return $pesanan->fresh(['meja', 'details.menu']);
+        return $pesanan->fresh(['meja', 'details.menu', 'details.addons.addon']);
+
     }
 
     // ubah autoExpirePesanan jadi public
@@ -375,11 +399,18 @@ class PesananService
 
     private function recalculateTotal(Pesanan $pesanan): void
     {
-        $total = PesananDetail::where('pesanan_id', $pesanan->id)
+        $totalItems = PesananDetail::where('pesanan_id', $pesanan->id)
                               ->selectRaw('SUM(harga * qty) as total')
                               ->value('total') ?? 0;
 
-        $pesanan->update(['total_harga' => $total]);
+        $totalAddons = \Illuminate\Support\Facades\DB::table('pesanan_addon')
+            ->join('pesanan_detail', 'pesanan_addon.pesanan_detail_id', '=', 'pesanan_detail.id')
+            ->join('addon', 'pesanan_addon.addon_id', '=', 'addon.id')
+            ->where('pesanan_detail.pesanan_id', $pesanan->id)
+            ->sum(\Illuminate\Support\Facades\DB::raw('addon.harga * pesanan_addon.qty'));
+
+        $pesanan->update(['total_harga' => $totalItems + $totalAddons]);
+
     }
 
     /**

@@ -158,7 +158,7 @@ class PesananController extends Controller
 
         try {
             $pesanan = $this->service->updateTipePesanan($pesanan, $request->tipe_pesanan);
-            return response()->json(['message' => 'Tipe pesanan diupdate', 'data' => $pesanan]);
+            return response()->json(['message' => 'Tipe pesanan diupdate', 'data' => new PesananResource($pesanan)]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
