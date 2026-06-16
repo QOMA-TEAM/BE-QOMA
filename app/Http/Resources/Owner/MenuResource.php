@@ -12,9 +12,7 @@ class MenuResource extends JsonResource
             'harga_default'  => (float) $this->harga_default,
             'keterangan'     => $this->keterangan,
             'is_active'      => $this->is_active,
-            'gambar'         => $this->gambar
-                                    ? asset('storage/' . $this->gambar)
-                                    : null,
+            'gambar' => app(\App\Services\ImageService::class)->url($this->gambar),
             'kategori'       => $this->whenLoaded('kategori', fn() => [
                 'id'   => $this->kategori->id,
                 'nama' => $this->kategori->nama,

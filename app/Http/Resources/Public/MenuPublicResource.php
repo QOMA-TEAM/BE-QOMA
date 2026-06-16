@@ -14,9 +14,7 @@ class MenuPublicResource extends JsonResource
             'harga'        => (float) ($this->harga_outlet ?? $this->harga_default),
             'keterangan'   => $this->keterangan,
             'is_available' => $this->is_available ?? true,
-            'gambar'       => $this->gambar
-                                ? asset('storage/' . $this->gambar)
-                                : null,
+            'gambar' => app(\App\Services\ImageService::class)->url($this->gambar),
             'bahan_baku'   => $this->whenLoaded('bahanMasters', fn() =>
                 $this->bahanMasters->map(fn($b) => [
                     'nama'   => $b->nama,

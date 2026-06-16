@@ -15,9 +15,7 @@ class MenuOutletResource extends JsonResource
                 'id'        => $this->menu->id,
                 'nama'      => $this->menu->nama,
                 'keterangan'=> $this->menu->keterangan,
-                'gambar'    => $this->menu->gambar
-                                    ? asset('storage/' . $this->menu->gambar)
-                                    : null,
+                'gambar' => app(\App\Services\ImageService::class)->url($this->menu->gambar ?? null),
                 'kategori'  => $this->menu->kategori->nama ?? '-',
             ]),
         ];

@@ -13,12 +13,8 @@ class OutletResource extends JsonResource
             'alamat'        => $this->alamat,
             'email'         => $this->email,
             'status_buka'   => $this->status_buka,
-            'gambar_icon'   => $this->gambar_icon
-                                ? asset('storage/' . $this->gambar_icon)
-                                : null,
-            'gambar_header' => $this->gambar_header
-                                ? asset('storage/' . $this->gambar_header)
-                                : null,
+            'gambar_icon'   => app(\App\Services\ImageService::class)->url($this->gambar_icon),
+            'gambar_header' => app(\App\Services\ImageService::class)->url($this->gambar_header),
             'mejas_count'   => $this->whenCounted('mejas'),
             'users'         => $this->whenLoaded('users', fn() =>
                 $this->users->map(fn($u) => [

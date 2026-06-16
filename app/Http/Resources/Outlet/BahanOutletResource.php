@@ -81,9 +81,7 @@ class BahanOutletResource extends JsonResource
                 'satuan_dasar'      => $this->bahanMaster->satuan_dasar,
                 'konversi_ke_dasar' => (float) $this->bahanMaster->konversi_ke_dasar,
                 'info_konversi'     => "1 {$this->bahanMaster->satuan} = {$this->bahanMaster->konversi_ke_dasar} {$this->bahanMaster->satuan_dasar}",
-                'gambar'            => $this->bahanMaster->gambar
-                                        ? asset('storage/' . $this->bahanMaster->gambar)
-                                        : null,
+                'gambar' => app(\App\Services\ImageService::class)->url($this->bahanMaster->gambar),
             ]),
         ];
     }

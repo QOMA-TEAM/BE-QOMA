@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use Illuminate\Http\UploadedFile;
@@ -8,43 +7,46 @@ use Illuminate\Support\Str;
 
 class ImageService
 {
-    /**
-     * Upload gambar ke storage.
-     *
-     * @param UploadedFile $file    File yang diupload
-     * @param string       $folder  Nama folder tujuan (tanpa leading slash)
-     * @return string               Path relatif untuk disimpan di DB
-     *
-     * Contoh:
-     * $path = $imageService->upload($request->file('gambar'), 'menu/usaha-id');
-     * // return: "menu/usaha-id/uuid.jpg"
-     */
-    public function upload(UploadedFile $file, string $folder): string
+    private string $disk;
+    private ?string $publicUrl;
+
+    public function __construct()
     {
-        $filename  = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        return $file->storeAs($folder, $filename, 'public');
+        $this->disk      = config('filesystems.default', 'supabase');
+        $this->publicUrl = env('SUPABASE_URL') . '/storage/v1/object/public/' . env('SUPABASE_STORAGE_BUCKET');
     }
 
     /**
-     * Hapus gambar dari storage.
-     *
-     * @param string|null $path  Path relatif dari DB
+     * Upload gambar ke Supabase Storage
+     * Return: path relatif untuk disimpan di DB
+     * Contoh return: "menu/usaha-id/uuid.jpg"
+     */
+    public function upload(UploadedFile $file, string $folder): string
+    {
+        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $path     = $folder . '/' . $filename;
+
+        Storage::disk($this->disk)->put($path, file_get_contents($file), 'public');
+
+        return $path;
+    }
+
+    /**
+     * Hapus gambar dari Supabase Storage
      */
     public function delete(?string $path): void
     {
-        if ($path && Storage::disk('public')->exists($path)) {
-            Storage::disk('public')->delete($path);
+        if (!$path) return;
+
+        try {
+            Storage::disk($this->disk)->delete($path);
+        } catch (\Exception $e) {
+            \Log::warning("ImageService delete gagal: {$path} — " . $e->getMessage());
         }
     }
 
     /**
-     * Replace gambar lama dengan yang baru.
-     * Hapus lama → upload baru → return path baru.
-     *
-     * @param UploadedFile $file     File baru
-     * @param string|null  $oldPath  Path lama yang akan dihapus
-     * @param string       $folder   Folder tujuan
-     * @return string                Path baru
+     * Ganti gambar lama dengan yang baru
      */
     public function replace(UploadedFile $file, ?string $oldPath, string $folder): string
     {
@@ -53,14 +55,20 @@ class ImageService
     }
 
     /**
-     * Generate URL publik dari path.
-     *
-     * @param string|null $path
-     * @return string|null
+     * Generate URL publik dari path
+     * Contoh: "menu/usaha-id/uuid.jpg"
+     * → "https://xxxx.supabase.co/storage/v1/object/public/qoma-storage/menu/usaha-id/uuid.jpg"
      */
     public function url(?string $path): ?string
     {
         if (!$path) return null;
+
+        // Kalau masih pakai disk supabase
+        if ($this->disk === 'supabase') {
+            return $this->publicUrl . '/' . ltrim($path, '/');
+        }
+
+        // Fallback ke local (development tanpa Supabase)
         return asset('storage/' . $path);
     }
 }

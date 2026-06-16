@@ -117,7 +117,7 @@ class MenuPublicController extends Controller
                 'kategori'     => $menu->kategori->nama ?? '-',
                 'kategori_id'  => $menu->kategori_id,
                 'harga'        => (float) $harga,
-                'gambar'       => $menu->gambar ? asset('storage/' . $menu->gambar) : null,
+                'gambar'       => app(\App\Services\ImageService::class)->url($menu->gambar),
                 'keterangan'   => $menu->keterangan,
                 'is_available' => $isAvailable,
                 'bahan_baku'   => $menu->bahanMasters->map(fn($b) => [
@@ -153,11 +153,11 @@ class MenuPublicController extends Controller
                     'nama_outlet'   => $outlet->nama_outlet,
 
                     'gambar_icon'   => $outlet->gambar_icon
-                        ? asset('storage/' . $outlet->gambar_icon)
+                        ? app(\App\Services\ImageService::class)->url($outlet->gambar_icon)
                         : null,
 
                     'gambar_header' => $outlet->gambar_header
-                        ? asset('storage/' . $outlet->gambar_header)
+                        ? app(\App\Services\ImageService::class)->url($outlet->gambar_header)
                         : null,
                 ],
 
@@ -220,7 +220,7 @@ class MenuPublicController extends Controller
                 'kategori'    => $menu->kategori->nama ?? '-',
                 'harga'       => (float) $harga,
                 'harga_dasar' => (float) $menu->harga_default,
-                'gambar'      => $menu->gambar ? asset('storage/' . $menu->gambar) : null,
+                'gambar'      => $menu->gambar ? app(\App\Services\ImageService::class)->url($menu->gambar) : null,
                 'keterangan'  => $menu->keterangan,
                 'bahan_baku'  => $menu->bahanMasters->map(fn($b) => [
                     'nama'   => $b->nama,

@@ -93,7 +93,7 @@ class MenuOutletController extends Controller
                 ),
 
                 'gambar' => $menu->gambar
-                    ? asset('storage/' . $menu->gambar)
+                    ? app(\App\Services\ImageService::class)->url($menu->gambar)
                     : null,
 
                 'keterangan' => $menu->keterangan,
