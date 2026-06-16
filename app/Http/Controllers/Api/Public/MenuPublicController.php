@@ -92,7 +92,7 @@ class MenuPublicController extends Controller
         // Ambil usaha_id dari outlet untuk filter menu milik usaha ini
         $usahaId = $outlet->usaha_id;
 
-        $$menus = Menu::select('id', 'usaha_id', 'kategori_id', 'nama', 'harga_default', 'gambar', 'keterangan')
+        $menus = Menu::select('id', 'usaha_id', 'kategori_id', 'nama', 'harga_default', 'gambar', 'keterangan')
              ->where('usaha_id', $usahaId)
              ->where('is_active', true)
              ->with([
@@ -164,12 +164,6 @@ class MenuPublicController extends Controller
                 'kategoris'         => $kategoris,
                 'menu_per_kategori' => $menuPerKategori,
                 'total_menu'        => $menus->count(),
-
-            'addons' => $menu->addons->map(fn($a) => [
-                'id'    => $a->id,
-                'nama'  => $a->nama,
-                'harga' => (float) $a->harga,
-            ]),
             ],
         ]);
     }
