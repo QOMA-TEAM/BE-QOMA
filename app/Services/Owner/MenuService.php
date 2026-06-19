@@ -2,12 +2,14 @@
 namespace App\Services\Owner;
 use App\Models\{Menu, MenuOutlet, Outlet};
 use App\Services\ActivityLogService;
+use App\Services\ImageService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\{DB, Storage};
 use Illuminate\Support\Str;
 
 class MenuService
 {
+    public function __construct(private ImageService $imageService) {}
     public function getByUsaha(string $usahaId, array $filters = [], int $perPage = 15)
     {
         $query = Menu::where('usaha_id', $usahaId)
@@ -28,7 +30,7 @@ class MenuService
                 'kategori_id'   => $data['kategori_id'],
                 'nama'          => $data['nama'],
                 'harga_default' => $data['harga_default'],
-                'gambar'        => $gambar ? $this->uploadGambar($gambar, $usahaId) : null,
+                'gambar'        => $gambar ? $this->imageService->upload($gambar, "menu/{$usahaId}") : null,
                 'keterangan'    => $data['keterangan'] ?? null,
                 'is_active'     => $data['is_active'] ?? true,
             ]);
@@ -52,8 +54,7 @@ class MenuService
             $oldHarga = $menu->harga_default;
 
             if ($gambar) {
-                if ($menu->gambar) Storage::disk('public')->delete($menu->gambar);
-                $data['gambar'] = $this->uploadGambar($gambar, $menu->usaha_id);
+                $data['gambar'] = $this->imageService->replace($gambar, $menu->gambar, "menu/{$menu->usaha_id}");
             }
 
             $menu->update([
@@ -85,14 +86,9 @@ class MenuService
 
     public function delete(Menu $menu): void
     {
-        if ($menu->gambar) Storage::disk('public')->delete($menu->gambar);
+        $this->imageService->delete($menu->gambar);
         $menu->delete();
         ActivityLogService::log('delete_menu', "Menu '{$menu->nama}' dihapus", [], $menu->usaha_id);
-    }
-
-    private function uploadGambar(UploadedFile $file, string $usahaId): string
-    {
-        return $file->storeAs("menu/{$usahaId}", Str::uuid().'.'.$file->getClientOriginalExtension(), 'public');
     }
 
     private function syncBahanMaster(Menu $menu, array $items): void

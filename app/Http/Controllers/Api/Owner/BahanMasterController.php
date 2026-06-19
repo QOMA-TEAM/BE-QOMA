@@ -196,7 +196,7 @@ class BahanMasterController extends Controller
             ], 422);
         }
 
-        if ($bahan->gambar) Storage::disk('public')->delete($bahan->gambar);
+        $this->imageService->delete($bahan->gambar);
         $bahan->delete();
 
         ActivityLogService::log(

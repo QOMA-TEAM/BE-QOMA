@@ -38,6 +38,13 @@ class ImageService
     {
         if (!$path) return;
 
+        // If the path is a full URL, strip the base URL
+        if ($this->publicUrl && str_starts_with($path, $this->publicUrl)) {
+            $path = str_replace($this->publicUrl . '/', '', $path);
+        } else if (str_starts_with($path, asset('storage/'))) {
+            $path = str_replace(asset('storage/') . '/', '', $path);
+        }
+
         try {
             Storage::disk($this->disk)->delete($path);
         } catch (\Exception $e) {

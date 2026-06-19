@@ -30,16 +30,18 @@ class PesananService
                             'meja:id,nomor_meja',
                             'details:id,pesanan_id,menu_id,qty,harga',
                             'details.menu:id,nama',
+                            'pembayaran:id,pesanan_id,metode',
                         ])
                         ->latest();
 
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
-                    // Kalau ada filter status spesifik (termasuk 'confirmed'), tetap tampilkan
-                    $query->where('status', $filters['status']);
-                } elseif (empty($filters['status'])) {
-                    // ← UBAH: Default dashboard — sembunyikan 'expired' DAN 'confirmed'
-                    $query->whereNotIn('status', ['expired', 'confirmed']);
-                }
+            // Kalau ada filter status spesifik, terapkan
+            $query->where('status', $filters['status']);
+        } elseif (empty($filters['status'])) {
+            // Default: tidak menampilkan yang sudah paid atau cancelled (disesuaikan dengan kebutuhan frontend)
+            // Biarkan frontend yang mem-filter (pending, confirmed, expired)
+            // Atau cukup sembunyikan 'paid' dan 'cancelled' jika tidak diminta
+        }
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];

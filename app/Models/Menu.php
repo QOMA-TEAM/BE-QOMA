@@ -23,6 +23,15 @@ class Menu extends Model
         return $this->belongsToMany(Addon::class, 'menu_addon', 'menu_id', 'addon_id')
                     ->withTimestamps();
     }
+
+    public function toArray()
+    {
+        $array = parent::toArray();
+        if (!empty($array['gambar']) && !str_starts_with($array['gambar'], 'http')) {
+            $array['gambar'] = app(\App\Services\ImageService::class)->url($array['gambar']);
+        }
+        return $array;
+    }
 }
 
 

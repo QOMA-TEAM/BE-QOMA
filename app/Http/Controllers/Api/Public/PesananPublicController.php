@@ -33,7 +33,7 @@ class PesananPublicController extends Controller
             'outlet_id'                  => 'required|string|exists:outlet,id',
             'meja_id'                    => 'required|string|exists:meja,id',
             'nama_pelanggan'             => 'required|string|max:100',
-            'no_telp'                    => 'required|string|max:20',
+            'no_telp'                    => 'nullable|string|max:20',
             'items'                      => 'required|array|min:1',
             'items.*.menu_id'            => 'required|string|exists:menu,id',
             'items.*.qty'                => 'required|integer|min:1',

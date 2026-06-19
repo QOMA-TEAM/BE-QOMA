@@ -2,7 +2,7 @@
 namespace App\Services\Outlet;
 
 use App\Models\{BahanMaster, BahanOutlet, StockMovement, StockOpname, StockOpnameSession};
-use App\Services\{ActivityLogService, LaporanKeuanganService};
+use App\Services\{ActivityLogService, ImageService, LaporanKeuanganService};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Events\StokMenipis;
@@ -10,7 +10,8 @@ use App\Events\StokMenipis;
 class BahanOutletService
 {
     public function __construct(
-        private LaporanKeuanganService $laporanService
+        private LaporanKeuanganService $laporanService,
+        private ImageService           $imageService,
     ) {}
 
     // ============================================================
@@ -340,7 +341,7 @@ class BahanOutletService
         if ($existing) {
             // Update draft yang sudah ada
             if ($fotoPath && $existing->foto_bukti) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($existing->foto_bukti);
+                $this->imageService->delete($existing->foto_bukti);
             }
 
             $existing->update([
@@ -384,7 +385,7 @@ class BahanOutletService
         }
 
         if ($fotoPath && $item->foto_bukti) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($item->foto_bukti);
+            $this->imageService->delete($item->foto_bukti);
         }
 
         $item->update([
@@ -411,7 +412,7 @@ class BahanOutletService
         }
 
         if ($item->foto_bukti) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($item->foto_bukti);
+            $this->imageService->delete($item->foto_bukti);
         }
 
         $item->delete();
@@ -577,9 +578,7 @@ class BahanOutletService
 
                 // Kalau bahan tidak ditemukan atau stok tidak cukup → tidak bisa diselamatkan, hapus
                 if (!$bahanOutlet || (float) $bahanOutlet->stok < (float) $item->jumlah) {
-                    if ($item->foto_bukti) {
-                        \Illuminate\Support\Facades\Storage::disk('public')->delete($item->foto_bukti);
-                    }
+                    $this->imageService->delete($item->foto_bukti);
                     $item->delete();
                     $totalGagal++;
                     continue;

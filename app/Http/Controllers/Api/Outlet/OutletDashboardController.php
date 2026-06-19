@@ -30,8 +30,8 @@ class OutletDashboardController extends Controller
                     'id'          => $outlet->id,
                     'nama_outlet' => $outlet->nama_outlet,
                     'status_buka' => $outlet->status_buka,
-                    'gambar_icon'   => $outlet->gambar_icon ? asset('storage/' . $outlet->gambar_icon) : null,
-                    'gambar_header' => $outlet->gambar_header ? asset('storage/' . $outlet->gambar_header) : null,
+                    'gambar_icon'   => $outlet->gambar_icon ? app(\App\Services\ImageService::class)->url($outlet->gambar_icon) : null,
+                    'gambar_header' => $outlet->gambar_header ? app(\App\Services\ImageService::class)->url($outlet->gambar_header) : null,
 
                 ],
                 'keuangan_7_hari' => $laporan['summary'],
@@ -114,10 +114,10 @@ class OutletDashboardController extends Controller
         return response()->json([
             'message'       => 'Gambar outlet berhasil diupdate',
             'gambar_icon'   => $outlet->fresh()->gambar_icon
-                                ? asset('storage/' . $outlet->fresh()->gambar_icon)
+                                ? app(\App\Services\ImageService::class)->url($outlet->fresh()->gambar_icon)
                                 : null,
             'gambar_header' => $outlet->fresh()->gambar_header
-                                ? asset('storage/' . $outlet->fresh()->gambar_header)
+                                ? app(\App\Services\ImageService::class)->url($outlet->fresh()->gambar_header)
                                 : null,
         ]);
     }

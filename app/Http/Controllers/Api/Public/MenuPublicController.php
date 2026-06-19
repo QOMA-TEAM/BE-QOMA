@@ -201,10 +201,9 @@ class MenuPublicController extends Controller
 
         $harga = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
 
-        // Ambil addon milik usaha ini
-        $addons = \App\Models\Addon::where('usaha_id', $outlet->usaha_id)
-                                   ->select('id', 'nama', 'harga')
-                                   ->get();
+        // Ambil addon milik menu ini (bukan semua addon milik usaha)
+        // Ini memperbaiki bug di mana addon menu lain (seperti bakso) muncul di menu katsu
+        $addons = $menu->addons()->select('addon.id', 'addon.nama', 'addon.harga')->get();
 
         return response()->json([
             'message' => 'Detail menu',

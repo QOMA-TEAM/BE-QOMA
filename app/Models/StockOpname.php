@@ -25,4 +25,13 @@ class StockOpname extends Model
 
     public function isDraft(): bool  { return $this->status === 'draft'; }
     public function isFinal(): bool  { return $this->status === 'final'; }
+
+    public function toArray()
+    {
+        $array = parent::toArray();
+        if (!empty($array['foto_bukti']) && !str_starts_with($array['foto_bukti'], 'http')) {
+            $array['foto_bukti'] = app(\App\Services\ImageService::class)->url($array['foto_bukti']);
+        }
+        return $array;
+    }
 }

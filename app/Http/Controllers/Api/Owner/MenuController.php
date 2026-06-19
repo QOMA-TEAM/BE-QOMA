@@ -278,7 +278,7 @@ class MenuController extends Controller
         $usahaId = $this->getUsahaId();
         $menu    = $this->validateMilikUsaha(Menu::class, $id);
 
-        if ($menu->gambar) Storage::disk('public')->delete($menu->gambar);
+        $this->imageService->delete($menu->gambar);
         $menu->delete();
 
         ActivityLogService::log(

@@ -12,4 +12,13 @@ class BahanMaster extends Model
 
     public function usaha()        { return $this->belongsTo(Usaha::class, 'usaha_id'); }
     public function bahanOutlets() { return $this->hasMany(BahanOutlet::class, 'bahan_master_id'); }
+
+    public function toArray()
+    {
+        $array = parent::toArray();
+        if (!empty($array['gambar']) && !str_starts_with($array['gambar'], 'http')) {
+            $array['gambar'] = app(\App\Services\ImageService::class)->url($array['gambar']);
+        }
+        return $array;
+    }
 }
