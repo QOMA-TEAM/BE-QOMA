@@ -296,6 +296,7 @@ class BahanOutletService
     public function getListSesi(string $outletId, int $perPage = 15)
     {
         return StockOpnameSession::where('outlet_id', $outletId)
+                                ->with(['items.bahanMaster:id,nama,satuan,harga_default,gambar'])
                                 ->withCount([
                                     'items as total_item',
                                     'items as total_draft' => fn($q) => $q->where('status', 'draft'),
@@ -469,7 +470,7 @@ class BahanOutletService
                     (float)$bahanOutlet->stok <
                     (float)$item->jumlah
                 ) {
-                    continue;
+                    throw new \Exception("Stok {$bahanOutlet->bahanMaster->nama} tidak mencukupi untuk difinalisasi. (Sisa sistem: " . (float)$bahanOutlet->stok . ")");
                 }
 
                 $item->update([
@@ -667,7 +668,7 @@ class BahanOutletService
                                       'satuan'        => $b->bahanMaster->satuan,
                                       'stok_saat_ini' => (float) $b->stok,
                                       'stok_minimum'  => (float) $b->stok_minimum,
-                                      'pesan'         => "Stok {$b->bahanMaster->nama} menipis! Sisa {$b->stok} {$b->bahanMaster->satuan}",
+                                      'pesan'         => "Stok {$b->bahanMaster->nama} menipis! Sisa " . (float)$b->stok . " {$b->bahanMaster->satuan}",
                                   ]);
 
         // 2. Batch mendekati expired (≤ 3 hari) — dari stock_movements
@@ -682,9 +683,10 @@ class BahanOutletService
                                          ->get()
                                          ->map(function ($m) {
                                              $sisaHari = (int) now()->startOfDay()->diffInDays($m->expired_date->startOfDay());
+                                             $qty = (float) $m->remaining_quantity;
                                              $pesan = $sisaHari === 0 
-                                                 ? "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired hari ini!"
-                                                 : "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired dalam {$sisaHari} hari!";
+                                                 ? "{$qty} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired hari ini!"
+                                                 : "{$qty} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} expired dalam {$sisaHari} hari!";
                                              return [
                                                  'tipe'               => 'mendekati_expired',
                                                  'bahan'              => $m->bahanMaster->nama,
@@ -705,14 +707,17 @@ class BahanOutletService
                                      ->whereDate('expired_date', '<', now())
                                      ->with('bahanMaster:id,nama,satuan')
                                      ->get()
-                                     ->map(fn($m) => [
+                                     ->map(function($m) {
+                                         $qty = (float) $m->remaining_quantity;
+                                         return [
                                          'tipe'               => 'sudah_expired',
                                          'bahan'              => $m->bahanMaster->nama,
                                          'satuan'             => $m->bahanMaster->satuan,
-                                         'remaining_quantity' => (float) $m->remaining_quantity,
+                                         'remaining_quantity' => $qty,
                                          'expired_date'       => $m->expired_date->format('Y-m-d'),
-                                         'pesan'              => "{$m->remaining_quantity} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} EXPIRED sejak {$m->expired_date->format('d M Y')}!",
-                                     ]);
+                                         'pesan'              => "{$qty} {$m->bahanMaster->satuan} {$m->bahanMaster->nama} EXPIRED sejak {$m->expired_date->format('d M Y')}!",
+                                         ];
+                                     });
 
         return [
             'total_alert'       => $stokMenipis->count() + $mendekatiExpired->count() + $sudahExpired->count(),

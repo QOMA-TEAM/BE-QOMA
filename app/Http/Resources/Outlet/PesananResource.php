@@ -16,11 +16,12 @@ class PesananResource extends JsonResource
 
         return [
             'id'             => $this->id,
-            'nomor_meja'     => $this->whenLoaded('meja', fn() => $this->meja->nomor_meja, '-'),
+            'nomor_meja'     => $this->whenLoaded('meja', fn() => $this->meja?->nomor_meja ?? '-', '-'),
             'nama_pelanggan' => $this->nama_pelanggan,
             'no_telp'        => $this->no_telp,
             'total_harga'    => (float) $this->total_harga,
             'status'         => $this->status,
+            'tipe_pesanan'   => $this->tipe_pesanan,
             'status_label'   => $statusLabel,
             'created_at'     => $this->created_at?->format('Y-m-d H:i'),
             'items'          => $this->whenLoaded('details', fn() =>

@@ -293,16 +293,12 @@ class PesananService
                                              ->where('menu_id', $menu->id)
                                              ->doesntHave('addons')
                                              ->first();
-                } else {
-                    PesananDetail::create([
-                        'id'         => Str::uuid(),
-                        'pesanan_id' => $pesanan->id,
-                        'menu_id'    => $menu->id,
-                        'qty'        => $item['qty'],
-                        'harga'      => $harga,
-                    ]);
+                }
 
-                                        $detail = PesananDetail::create([
+                if ($existing) {
+                    $existing->increment('qty', $item['qty']);
+                } else {
+                    $detail = PesananDetail::create([
                         'id'         => Str::uuid(),
                         'pesanan_id' => $pesanan->id,
                         'menu_id'    => $menu->id,
@@ -320,7 +316,6 @@ class PesananService
                             ]);
                         }
                     }
-
                 }
             }
             $this->recalculateTotal($pesanan);

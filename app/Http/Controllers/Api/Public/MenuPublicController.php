@@ -106,10 +106,26 @@ class MenuPublicController extends Controller
              ->orderBy('nama')
              ->get();
 
-        $menus = $menus->map(function ($menu) {
+        $bahanOutlets = \App\Models\BahanOutlet::where('outlet_id', $request->outlet_id)
+            ->pluck('stok', 'bahan_master_id');
+
+        $menus = $menus->map(function ($menu) use ($bahanOutlets) {
             $menuOutlet  = $menu->menuOutlets->first();
             $harga       = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
             $isAvailable = $menuOutlet ? $menuOutlet->is_available : true;
+
+            // Cek stok bahan
+            $stockSufficient = true;
+            foreach ($menu->bahanMasters as $bahan) {
+                $stokTersedia = $bahanOutlets->get($bahan->id, 0);
+                if ((float)$stokTersedia < (float)$bahan->pivot->jumlah_pakai) {
+                    $stockSufficient = false;
+                    break;
+                }
+            }
+
+            // Available jika manually di-set available DAN stok bahan cukup
+            $isAvailable = $isAvailable && $stockSufficient;
 
             return [
                 'id'           => $menu->id,
@@ -131,7 +147,7 @@ class MenuPublicController extends Controller
                     'harga' => (float) $a->harga,
                 ]),
             ];
-        })->filter(fn($m) => $m['is_available'])->values();
+        })->values();
 
         // Kelompokkan per kategori
         $menuPerKategori = $menus->groupBy('kategori')->map(fn($items, $kategori) => [

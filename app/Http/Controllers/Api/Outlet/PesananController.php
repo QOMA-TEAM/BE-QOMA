@@ -127,8 +127,8 @@ class PesananController extends Controller
         try {
             $pesanan = $this->service->konfirmasiPembayaran($pesanan, $request->metode);
             return response()->json(['message' => 'Pembayaran berhasil dikonfirmasi', 'data' => new PesananResource($pesanan)]);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine()], 422);
         }
     }
 

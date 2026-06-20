@@ -54,8 +54,8 @@ class BahanOutletResource extends JsonResource
                 'jumlah_awal'        => (float) $b->quantity,
                 'sisa'               => (float) $b->remaining_quantity,
                 'sisa_display'       => $konversi > 1
-                                        ? round($b->remaining_quantity / $konversi, 3) . " {$satuan}"
-                                        : $b->remaining_quantity . " {$satuanDasar}",
+                                        ? round((float) $b->remaining_quantity / $konversi, 3) . " {$satuan}"
+                                        : (float) $b->remaining_quantity . " {$satuanDasar}",
                 'expired_date'       => $b->expired_date?->format('Y-m-d'),
                 'tanggal_masuk'      => $b->created_at->format('Y-m-d'),
                 'sudah_expired'      => $b->expired_date && $b->expired_date->isPast(),
@@ -80,6 +80,7 @@ class BahanOutletResource extends JsonResource
                 'satuan'            => $this->bahanMaster->satuan,
                 'satuan_dasar'      => $this->bahanMaster->satuan_dasar,
                 'konversi_ke_dasar' => (float) $this->bahanMaster->konversi_ke_dasar,
+                'harga_default'     => (float) $this->bahanMaster->harga_default,
                 'info_konversi'     => "1 {$this->bahanMaster->satuan} = {$this->bahanMaster->konversi_ke_dasar} {$this->bahanMaster->satuan_dasar}",
                 'gambar' => app(\App\Services\ImageService::class)->url($this->bahanMaster->gambar),
             ]),
