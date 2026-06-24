@@ -18,6 +18,10 @@ class ActivityLogService
             $usahaId = \App\Models\Outlet::where('id', $outletId)->value('usaha_id');
         }
 
+        if (!$outletId && auth()->check()) {
+            $outletId = auth()->user()->outlet_id;
+        }
+
         ActivityLog::create([
             'id'         => Str::uuid(),
             'user_id'    => auth()->id(),

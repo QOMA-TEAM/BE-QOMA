@@ -41,6 +41,18 @@ class ActivityLogController extends Controller
             $query->whereDate('created_at', '<=', $request->sampai);
         }
 
+         if ($request->search) {
+            $search = strtolower($request->search);
+            $query->where(function($q) use ($search) {
+                $q->whereRaw('LOWER(aktivitas) LIKE ?', ["%{$search}%"])
+                  ->orWhereRaw('LOWER(deskripsi) LIKE ?', ["%{$search}%"])
+                  ->orWhereHas('user', function($u) use ($search) {
+                      $u->whereRaw('LOWER(nama_lengkap) LIKE ?', ["%{$search}%"])
+                        ->orWhereRaw('LOWER(username) LIKE ?', ["%{$search}%"]);
+                  });
+            });
+        }
+
         $logs = $query->paginate($this->getPerPage($request));
 
         return response()->json(
