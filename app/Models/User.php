@@ -15,7 +15,15 @@ class User extends Authenticatable implements JWTSubject
         'status', 'catatan_admin', 'no_telp', 'approved_at', 'rejected_at',
     ];
     protected $hidden = ['password'];
-    protected $casts  = ['is_active' => 'boolean'];
+    protected $casts  = [];
+
+    protected function isActive(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            set: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false',
+        );
+    }
 
     public function getJWTIdentifier() { return $this->getKey(); }
     public function getJWTCustomClaims() { return []; }

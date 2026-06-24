@@ -70,13 +70,21 @@ class KeuanganOutletController extends Controller
 
         $perPage  = $this->getPerPage($request);
         $page     = (int) $request->get('page', 1);
+        $tipe     = $request->get('tipe', 'semua'); // pendapatan|pengeluaran|kerugian|semua
+
         $transaksi = $this->getListTransaksi($outletId, $dari, $sampai);
-        $total    = count($transaksi);
-        $items    = array_values(array_slice($transaksi, ($page - 1) * $perPage, $perPage));
+
+        // Filter by tipe (server-side so pagination works correctly)
+        if ($tipe !== 'semua') {
+            $transaksi = array_values(array_filter($transaksi, fn($t) => $t['tipe'] === $tipe));
+        }
+
+        $total = count($transaksi);
+        $items = array_values(array_slice($transaksi, ($page - 1) * $perPage, $perPage));
 
         return response()->json([
             'message' => 'Laporan keuangan outlet',
-            'filter'  => ['range' => $range, 'dari' => $dari, 'sampai' => $sampai],
+            'filter'  => ['range' => $range, 'dari' => $dari, 'sampai' => $sampai, 'tipe' => $tipe],
             'data'    => [
                 'cards' => [
                     'total_pendapatan'  => $totalPendapatan,

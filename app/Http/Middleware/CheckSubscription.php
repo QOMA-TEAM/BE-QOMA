@@ -64,7 +64,7 @@ class CheckSubscription
 
                 // Cek apakah ada deactivation queue pending
                 $queue = OutletDeactivationQueue::where('usaha_id', $user->usaha_id)
-                    ->where('is_processed', false)
+                    ->where('is_processed', 'false')
                     ->first();
 
                 if ($queue) {
@@ -105,7 +105,7 @@ class CheckSubscription
     {
         // Cek apakah deactivation queue sudah ada
         $existingQueue = OutletDeactivationQueue::where('usaha_id', $expiredSub->usaha_id)
-            ->where('is_processed', false)
+            ->where('is_processed', 'false')
             ->exists();
 
         if ($existingQueue) return;
@@ -116,7 +116,7 @@ class CheckSubscription
 
         if (!$freePlan) return;
 
-        $jumlahOutlet    = Outlet::where('usaha_id', $expiredSub->usaha_id)->where('status_buka', true)->count();
+        $jumlahOutlet    = Outlet::where('usaha_id', $expiredSub->usaha_id)->where('status_buka', 'true')->count();
         $kelebihanOutlet = max(0, $jumlahOutlet - $freePlan->batas_outlet);
 
         DB::transaction(function () use ($expiredSub, $freePlan, $kelebihanOutlet) {

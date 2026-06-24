@@ -19,8 +19,15 @@ class StockMovement extends Model
         'quantity'           => 'decimal:2',
         'remaining_quantity' => 'decimal:2',
         'expired_date'       => 'date',
-        'is_finished'        => 'boolean',
     ];
+
+    protected function isFinished(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            set: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false',
+        );
+    }
 
     public function outlet()      { return $this->belongsTo(Outlet::class, 'outlet_id'); }
     public function bahanMaster() { return $this->belongsTo(BahanMaster::class, 'bahan_master_id'); }

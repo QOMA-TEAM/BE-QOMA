@@ -46,8 +46,8 @@ class PesananService
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
-                $q->where('id', 'like', "%{$search}%")
-                ->orWhere('nama_pelanggan', 'like', "%{$search}%");
+                $q->where('id', 'ilike', "%{$search}%")
+                ->orWhere('nama_pelanggan', 'ilike', "%{$search}%");
             });
         }
 

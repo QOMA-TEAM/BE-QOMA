@@ -72,7 +72,7 @@ class PesananPublicController extends Controller
         foreach ($request->items as $index => $item) {
             $menu = Menu::where('id', $item['menu_id'])
                         ->where('usaha_id', $usahaId)
-                        ->where('is_active', true)
+                        ->where('is_active', 'true')
                         ->first();
 
             if (!$menu) {

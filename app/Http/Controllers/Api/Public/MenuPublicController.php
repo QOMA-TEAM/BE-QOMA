@@ -94,7 +94,7 @@ class MenuPublicController extends Controller
 
         $menus = Menu::select('id', 'usaha_id', 'kategori_id', 'nama', 'harga_default', 'gambar', 'keterangan')
              ->where('usaha_id', $usahaId)
-             ->where('is_active', true)
+             ->where('is_active', 'true')
              ->with([
                  'kategori:id,nama',
                  'bahanMasters:id,nama,satuan',
@@ -203,7 +203,7 @@ class MenuPublicController extends Controller
 
         $menu = Menu::where('id', $id)
                     ->where('usaha_id', $outlet->usaha_id)
-                    ->where('is_active', true)
+                    ->where('is_active', 'true')
                     ->with(['kategori:id,nama', 'bahanMasters:id,nama,satuan'])
                     ->first();
 

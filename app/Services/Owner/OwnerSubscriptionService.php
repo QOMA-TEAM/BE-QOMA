@@ -25,7 +25,7 @@ class OwnerSubscriptionService
 
         // Cek apakah ada deactivation queue yang belum diproses
         $deactivationQueue = OutletDeactivationQueue::where('usaha_id', $usahaId)
-            ->where('is_processed', false)
+            ->where('is_processed', 'false')
             ->first();
 
         return [
@@ -143,7 +143,7 @@ class OwnerSubscriptionService
     public function getDeactivationQueue(string $usahaId): array
     {
         $queue = OutletDeactivationQueue::where('usaha_id', $usahaId)
-            ->where('is_processed', false)
+            ->where('is_processed', 'false')
             ->first();
 
         if (!$queue) {
@@ -152,7 +152,7 @@ class OwnerSubscriptionService
 
         // Daftar outlet yang aktif (bisa dipilih untuk dinonaktifkan)
         $outlets = Outlet::where('usaha_id', $usahaId)
-            ->where('status_buka', true)
+            ->where('status_buka', 'true')
             ->orderByDesc('created_at')
             ->get(['id', 'nama_outlet', 'alamat', 'created_at']);
 
@@ -171,7 +171,7 @@ class OwnerSubscriptionService
     public function pilihOutletNonaktif(string $usahaId, array $outletIds): array
     {
         $queue = OutletDeactivationQueue::where('usaha_id', $usahaId)
-            ->where('is_processed', false)
+            ->where('is_processed', 'false')
             ->firstOrFail();
 
         if (count($outletIds) !== $queue->jumlah_harus_nonaktif) {
@@ -202,7 +202,7 @@ class OwnerSubscriptionService
 
             foreach ($outletIds as $outletId) {
                 $outlet = Outlet::find($outletId);
-                $outlet->update(['status_buka' => false]);
+                $outlet->update(['status_buka' => 'false']);
 
                 // Nonaktifkan user outlet
                 \App\Models\User::where('outlet_id', $outletId)->update(['is_active' => false]);

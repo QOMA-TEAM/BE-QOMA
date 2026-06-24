@@ -188,8 +188,8 @@ class PesananController extends Controller
         if ($request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('id', 'like', "%{$search}%")
-                ->orWhere('nama_pelanggan', 'like', "%{$search}%");
+                $q->where('id', 'ilike', "%{$search}%")
+                ->orWhere('nama_pelanggan', 'ilike', "%{$search}%");
             });
         }
 

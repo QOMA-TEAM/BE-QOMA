@@ -29,7 +29,7 @@ class MenuOutletController extends Controller
                         'keterangan'
                     )
                     ->where('usaha_id', $usahaId)
-                    ->where('is_active', true)
+                    ->where('is_active', 'true')
 
                     ->with([
                         'kategori:id,nama',
@@ -121,12 +121,19 @@ class MenuOutletController extends Controller
             ];
         });
 
+        // Hanya tampilkan kategori yang dipakai oleh minimal 1 menu aktif milik usaha ini
+        $kategoris = \App\Models\KategoriMenu::where('usaha_id', $usahaId)
+                        ->whereHas('menus', fn($q) => $q->where('usaha_id', $usahaId)->where('is_active', 'true'))
+                        ->orderBy('nama')
+                        ->get(['id', 'nama']);
+
         return response()->json([
             'message' => 'Daftar menu outlet',
             'outlet' => [
                 'id' => $outlet->id,
                 'nama_outlet' => $outlet->nama_outlet,
             ],
+            'kategoris' => $kategoris,
             'data' => $paginated->items(),
             'meta' => [
                 'current_page' => $paginated->currentPage(),
