@@ -44,7 +44,7 @@ class BahanOutletController extends Controller
         $query = \App\Models\BahanMaster::where('usaha_id', $usahaId);
 
         if ($request->search) {
-            $query->where('nama', 'like', "%{$request->search}%");
+            $query->where('nama', 'ilike', "%{$request->search}%");
         }
 
         $bahans = $query->orderBy('nama')->paginate($this->getPerPage($request));

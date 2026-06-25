@@ -62,7 +62,7 @@ class OutletService
                 'usaha_id'    => $usahaId,
                 'nama_outlet' => $data['nama_outlet'],
                 'alamat'      => $data['alamat'] ?? null,
-                'status_buka' => true,
+                'status_buka' => 'true',
                 'email'       => $data['email_outlet'], 
             ]);
 
@@ -93,7 +93,7 @@ class OutletService
                 'usaha_id'      => $usahaId,
                 'nama_outlet'   => $data['nama_outlet'],
                 'alamat'        => $data['alamat'] ?? null,
-                'status_buka'   => true,
+                'status_buka'   => 'true',
                 'email'         => $data['email_outlet'],
                 'gambar_icon'   => $iconPath,    // ← TAMBAHKAN
                 'gambar_header' => $headerPath,  // ← TAMBAHKAN
@@ -153,9 +153,10 @@ class OutletService
 
     public function toggleStatus(Outlet $outlet): Outlet
     {
-        $outlet->update(['status_buka' => !$outlet->status_buka]);
+        $newStatus = !$outlet->status_buka;
+        $outlet->update(['status_buka' => $newStatus ? 'true' : 'false']);
 
-        $status = $outlet->status_buka ? 'dibuka' : 'ditutup';
+        $status = $newStatus ? 'dibuka' : 'ditutup';
         ActivityLogService::log(
             'toggle_outlet_status',
             "Outlet '{$outlet->nama_outlet}' {$status}",

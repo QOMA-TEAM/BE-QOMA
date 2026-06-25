@@ -94,7 +94,7 @@ class MenuPublicController extends Controller
 
         $menus = Menu::select('id', 'usaha_id', 'kategori_id', 'nama', 'harga_default', 'gambar', 'keterangan')
              ->where('usaha_id', $usahaId)
-             ->where('is_active', true)
+             ->where('is_active', 'true')
              ->with([
                  'kategori:id,nama',
                  'bahanMasters:id,nama,satuan',
@@ -155,8 +155,9 @@ class MenuPublicController extends Controller
             'items'    => $items->values(),
         ])->values();
 
-        // Ambil list kategori milik usaha ini (untuk tab/filter di frontend)
-        $kategoris = KategoriMenu::where('usaha_id', $usahaId)
+        // Hanya tampilkan kategori yang memang memiliki menu aktif di respons ini
+        $kategoriIds = $menus->pluck('kategori_id')->unique()->filter();
+        $kategoris = KategoriMenu::whereIn('id', $kategoriIds)
                                  ->select('id', 'nama')
                                  ->orderBy('nama')
                                  ->get();
@@ -203,7 +204,7 @@ class MenuPublicController extends Controller
 
         $menu = Menu::where('id', $id)
                     ->where('usaha_id', $outlet->usaha_id)
-                    ->where('is_active', true)
+                    ->where('is_active', 'true')
                     ->with(['kategori:id,nama', 'bahanMasters:id,nama,satuan'])
                     ->first();
 

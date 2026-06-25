@@ -15,8 +15,15 @@ class OutletDeactivationQueue extends Model
 
     protected $casts = [
         'deadline'     => 'datetime',
-        'is_processed' => 'boolean',
     ];
+
+    protected function isProcessed(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            set: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false',
+        );
+    }
 
     public function usaha()        { return $this->belongsTo(Usaha::class, 'usaha_id'); }
     public function subscription() { return $this->belongsTo(Subscription::class, 'subscription_id'); }

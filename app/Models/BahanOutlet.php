@@ -28,7 +28,7 @@ class BahanOutlet extends Model
         return $this->hasMany(StockMovement::class, 'bahan_master_id', 'bahan_master_id')
                     ->where('outlet_id', $this->outlet_id)
                     ->where('type', 'in')
-                    ->where('is_finished', false)
+                    ->where('is_finished', 'false')
                     ->where('remaining_quantity', '>', 0)
                     ->orderBy('expired_date', 'asc');
     }

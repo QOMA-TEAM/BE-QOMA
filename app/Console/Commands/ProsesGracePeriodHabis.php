@@ -48,7 +48,7 @@ class ProsesGracePeriodHabis extends Command
             // Notif ke semua outlet
             $outletUsers = User::whereHas('role', fn($q) => $q->where('name', 'outlet'))
                 ->where('usaha_id', $usaha->id)
-                ->where('is_active', true)
+                ->where('is_active', 'true')
                 ->pluck('id');
 
             foreach ($outletUsers as $userId) {
@@ -79,7 +79,7 @@ class ProsesGracePeriodHabis extends Command
             // Hitung berapa outlet yang harus dinonaktifkan
             $freePlan      = \App\Models\Plan::where('is_lifetime', true)->first();
             $batasFreePlan = $freePlan ? $freePlan->batas_outlet : 2;
-            $jumlahOutlet  = Outlet::where('usaha_id', $usaha->id)->where('status_buka', true)->count();
+            $jumlahOutlet  = Outlet::where('usaha_id', $usaha->id)->where('status_buka', 'true')->count();
             $harusNonaktif = max(0, $jumlahOutlet - $batasFreePlan);
 
             if ($harusNonaktif > 0) {
@@ -135,13 +135,13 @@ class ProsesGracePeriodHabis extends Command
 
             // Ambil outlet terbaru yang aktif
             $outletTerbaru = Outlet::where('usaha_id', $queue->usaha_id)
-                ->where('status_buka', true)
+                ->where('status_buka', 'true')
                 ->orderByDesc('created_at')
                 ->limit($queue->jumlah_harus_nonaktif)
                 ->get();
 
             foreach ($outletTerbaru as $outlet) {
-                $outlet->update(['status_buka' => false]);
+                $outlet->update(['status_buka' => 'false']);
 
                 // Nonaktifkan user outlet ini
                 User::where('outlet_id', $outlet->id)->update(['is_active' => false]);
