@@ -190,7 +190,7 @@ class OwnerSubscriptionService
         }
 
         // Cari free plan sebelum transaction
-        $freePlan = Plan::where('is_lifetime', true)
+        $freePlan = Plan::where('is_lifetime', 'true')
             ->orderBy('harga')
             ->first();
 
@@ -273,7 +273,7 @@ class OwnerSubscriptionService
             ->first();
 
         // Tampilkan semua plan berbayar kecuali yang sedang dipakai
-        return Plan::where('is_lifetime', false)
+        return Plan::where('is_lifetime', 'false')
                 ->where('id', '!=', $subSekarang?->plan_id)
                 ->orderBy('harga', 'asc')
                 ->get()

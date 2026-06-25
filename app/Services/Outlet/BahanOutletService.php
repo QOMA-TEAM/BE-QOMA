@@ -49,7 +49,7 @@ class BahanOutletService
             ? $filters['sort_by'] : 'created_at';
         $sortDir = ($filters['sort_dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
-        return $query->orderBy($sortBy, $sortDir)->paginate($filters['per_page'] ?? 15);
+        return $query->orderBy($sortBy, $sortDir)->paginate($filters['per_page'] ?? 10);
     }
 
     // ============================================================
