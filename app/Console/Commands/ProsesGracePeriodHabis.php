@@ -77,7 +77,7 @@ class ProsesGracePeriodHabis extends Command
             if (!$usaha) continue;
 
             // Hitung berapa outlet yang harus dinonaktifkan
-            $freePlan      = \App\Models\Plan::where('is_lifetime', true)->first();
+            $freePlan      = \App\Models\Plan::where('is_lifetime', 'true')->first();
             $batasFreePlan = $freePlan ? $freePlan->batas_outlet : 2;
             $jumlahOutlet  = Outlet::where('usaha_id', $usaha->id)->where('status_buka', 'true')->count();
             $harusNonaktif = max(0, $jumlahOutlet - $batasFreePlan);
@@ -191,7 +191,7 @@ class ProsesGracePeriodHabis extends Command
     private function downgradeKeFree(Subscription $sub): void
     {
         // Cari free plan (lifetime / harga 0)
-        $freePlan = \App\Models\Plan::where('is_lifetime', true)
+        $freePlan = \App\Models\Plan::where('is_lifetime', 'true')
             ->orderBy('harga')
             ->first();
 
