@@ -155,8 +155,9 @@ class MenuPublicController extends Controller
             'items'    => $items->values(),
         ])->values();
 
-        // Ambil list kategori milik usaha ini (untuk tab/filter di frontend)
-        $kategoris = KategoriMenu::where('usaha_id', $usahaId)
+        // Hanya tampilkan kategori yang memang memiliki menu aktif di respons ini
+        $kategoriIds = $menus->pluck('kategori_id')->unique()->filter();
+        $kategoris = KategoriMenu::whereIn('id', $kategoriIds)
                                  ->select('id', 'nama')
                                  ->orderBy('nama')
                                  ->get();

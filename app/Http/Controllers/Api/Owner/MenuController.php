@@ -282,13 +282,11 @@ class MenuController extends Controller
         });
     }
 
-    // DELETE /owner/menu/{id}
     public function destroy(string $id)
     {
         $usahaId = $this->getUsahaId();
         $menu    = $this->validateMilikUsaha(Menu::class, $id);
 
-        $this->imageService->delete($menu->gambar);
         $menu->delete();
 
         ActivityLogService::log(

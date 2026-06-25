@@ -1,9 +1,11 @@
 <?php
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BahanMaster extends Model
 {
+    use SoftDeletes;
     protected $table = 'bahan_master';
     protected $keyType = 'string';
     public $incrementing = false;
