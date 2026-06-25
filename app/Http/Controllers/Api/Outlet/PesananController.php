@@ -127,8 +127,8 @@ class PesananController extends Controller
         try {
             $pesanan = $this->service->konfirmasiPembayaran($pesanan, $request->metode);
             return response()->json(['message' => 'Pembayaran berhasil dikonfirmasi', 'data' => new PesananResource($pesanan)]);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine()], 422);
         }
     }
 
@@ -188,8 +188,8 @@ class PesananController extends Controller
         if ($request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('id', 'like', "%{$search}%")
-                ->orWhere('nama_pelanggan', 'like', "%{$search}%");
+                $q->where('id', 'ilike', "%{$search}%")
+                ->orWhere('nama_pelanggan', 'ilike', "%{$search}%");
             });
         }
 

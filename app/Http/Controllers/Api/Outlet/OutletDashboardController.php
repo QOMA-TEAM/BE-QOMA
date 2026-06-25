@@ -55,14 +55,15 @@ class OutletDashboardController extends Controller
     public function toggleStatus()
     {
         $outlet = $this->getOutlet();
-        $outlet->update(['status_buka' => !$outlet->status_buka]);
+        $newStatus = !$outlet->status_buka;
+        $outlet->update(['status_buka' => $newStatus ? 'true' : 'false']);
 
-        $status = $outlet->status_buka ? 'dibuka' : 'ditutup';
+        $status = $newStatus ? 'dibuka' : 'ditutup';
 
         \App\Services\ActivityLogService::log(
             'toggle_outlet_status',
             "Outlet {$status}",
-            ['status_buka' => $outlet->status_buka],
+            ['status_buka' => $newStatus ? 'true' : 'false'],
             null,
             $outlet->id,
         );

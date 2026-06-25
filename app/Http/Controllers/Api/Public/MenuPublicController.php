@@ -94,7 +94,7 @@ class MenuPublicController extends Controller
 
         $menus = Menu::select('id', 'usaha_id', 'kategori_id', 'nama', 'harga_default', 'gambar', 'keterangan')
              ->where('usaha_id', $usahaId)
-             ->where('is_active', true)
+             ->where('is_active', 'true')
              ->with([
                  'kategori:id,nama',
                  'bahanMasters:id,nama,satuan',
@@ -106,10 +106,26 @@ class MenuPublicController extends Controller
              ->orderBy('nama')
              ->get();
 
-        $menus = $menus->map(function ($menu) {
+        $bahanOutlets = \App\Models\BahanOutlet::where('outlet_id', $request->outlet_id)
+            ->pluck('stok', 'bahan_master_id');
+
+        $menus = $menus->map(function ($menu) use ($bahanOutlets) {
             $menuOutlet  = $menu->menuOutlets->first();
             $harga       = $menuOutlet ? $menuOutlet->harga : $menu->harga_default;
             $isAvailable = $menuOutlet ? $menuOutlet->is_available : true;
+
+            // Cek stok bahan
+            $stockSufficient = true;
+            foreach ($menu->bahanMasters as $bahan) {
+                $stokTersedia = $bahanOutlets->get($bahan->id, 0);
+                if ((float)$stokTersedia < (float)$bahan->pivot->jumlah_pakai) {
+                    $stockSufficient = false;
+                    break;
+                }
+            }
+
+            // Available jika manually di-set available DAN stok bahan cukup
+            $isAvailable = $isAvailable && $stockSufficient;
 
             return [
                 'id'           => $menu->id,
@@ -131,7 +147,7 @@ class MenuPublicController extends Controller
                     'harga' => (float) $a->harga,
                 ]),
             ];
-        })->filter(fn($m) => $m['is_available'])->values();
+        })->values();
 
         // Kelompokkan per kategori
         $menuPerKategori = $menus->groupBy('kategori')->map(fn($items, $kategori) => [
@@ -139,8 +155,9 @@ class MenuPublicController extends Controller
             'items'    => $items->values(),
         ])->values();
 
-        // Ambil list kategori milik usaha ini (untuk tab/filter di frontend)
-        $kategoris = KategoriMenu::where('usaha_id', $usahaId)
+        // Hanya tampilkan kategori yang memang memiliki menu aktif di respons ini
+        $kategoriIds = $menus->pluck('kategori_id')->unique()->filter();
+        $kategoris = KategoriMenu::whereIn('id', $kategoriIds)
                                  ->select('id', 'nama')
                                  ->orderBy('nama')
                                  ->get();
@@ -187,7 +204,7 @@ class MenuPublicController extends Controller
 
         $menu = Menu::where('id', $id)
                     ->where('usaha_id', $outlet->usaha_id)
-                    ->where('is_active', true)
+                    ->where('is_active', 'true')
                     ->with(['kategori:id,nama', 'bahanMasters:id,nama,satuan'])
                     ->first();
 

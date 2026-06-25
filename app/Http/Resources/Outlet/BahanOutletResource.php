@@ -10,6 +10,12 @@ class BahanOutletResource extends JsonResource
         $satuanDasar = $this->bahanMaster->satuan_dasar ?? 'gram';
         $konversi    = (float) ($this->bahanMaster->konversi_ke_dasar ?? 1);
 
+        // Fallback ke SatuanHelper jika di DB belum diupdate (default 1)
+        if ($konversi == 1 && \App\Helpers\SatuanHelper::butuhKonversi($satuan)) {
+            $satuanDasar = \App\Helpers\SatuanHelper::getSatuanDasar($satuan);
+            $konversi    = \App\Helpers\SatuanHelper::keSatuanDasar(1, $satuan);
+        }
+
         // Tampilkan stok dalam satuan besar (kg) sekaligus satuan dasar (gram)
         $stokDasar    = (float) $this->stok;
         $stokDisplay  = $konversi > 1 ? round($stokDasar / $konversi, 3) : $stokDasar;
@@ -20,7 +26,7 @@ class BahanOutletResource extends JsonResource
         $batches = \App\Models\StockMovement::where('outlet_id', $this->outlet_id)
                                             ->where('bahan_master_id', $this->bahan_master_id)
                                             ->where('type', 'in')
-                                            ->where('is_finished', false)
+                                            ->where('is_finished', 'false')
                                             ->where('remaining_quantity', '>', 0)
                                             ->orderByRaw('CASE WHEN expired_date IS NULL THEN 1 ELSE 0 END')
                                             ->orderBy('expired_date', 'asc')
@@ -54,8 +60,8 @@ class BahanOutletResource extends JsonResource
                 'jumlah_awal'        => (float) $b->quantity,
                 'sisa'               => (float) $b->remaining_quantity,
                 'sisa_display'       => $konversi > 1
-                                        ? round($b->remaining_quantity / $konversi, 3) . " {$satuan}"
-                                        : $b->remaining_quantity . " {$satuanDasar}",
+                                        ? round((float) $b->remaining_quantity / $konversi, 3) . " {$satuan}"
+                                        : (float) $b->remaining_quantity . " {$satuanDasar}",
                 'expired_date'       => $b->expired_date?->format('Y-m-d'),
                 'tanggal_masuk'      => $b->created_at->format('Y-m-d'),
                 'sudah_expired'      => $b->expired_date && $b->expired_date->isPast(),
@@ -78,9 +84,10 @@ class BahanOutletResource extends JsonResource
                 'id'                => $this->bahanMaster->id,
                 'nama'              => $this->bahanMaster->nama,
                 'satuan'            => $this->bahanMaster->satuan,
-                'satuan_dasar'      => $this->bahanMaster->satuan_dasar,
-                'konversi_ke_dasar' => (float) $this->bahanMaster->konversi_ke_dasar,
-                'info_konversi'     => "1 {$this->bahanMaster->satuan} = {$this->bahanMaster->konversi_ke_dasar} {$this->bahanMaster->satuan_dasar}",
+                'satuan_dasar'      => $satuanDasar,
+                'konversi_ke_dasar' => $konversi,
+                'harga_default'     => (float) $this->bahanMaster->harga_default,
+                'info_konversi'     => "1 {$this->bahanMaster->satuan} = {$konversi} {$satuanDasar}",
                 'gambar' => app(\App\Services\ImageService::class)->url($this->bahanMaster->gambar),
             ]),
         ];

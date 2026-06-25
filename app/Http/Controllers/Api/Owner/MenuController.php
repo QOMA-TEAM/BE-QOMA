@@ -7,7 +7,7 @@ use App\Models\{BahanMaster, KategoriMenu, Menu, MenuOutlet, Outlet};
 use App\Services\ActivityLogService;
 use App\Traits\{HasPagination, OwnerAccess};
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{DB, Storage};
+use Illuminate\Support\Facades\{DB};
 use Illuminate\Support\Str;
 use App\Services\ImageService;
 
@@ -133,7 +133,7 @@ class MenuController extends Controller
             if ($request->bahan_baku) {
                 foreach ($request->bahan_baku as $item) {
                     DB::table('menu_bahan')->insert([
-                        'id'              => Str::uuid(),
+                        'id'              => (string) Str::uuid(),
                         'menu_id'         => $menu->id,
                         'bahan_master_id' => $item['bahan_master_id'],
                         'jumlah_pakai'    => $item['jumlah_pakai'],
@@ -145,14 +145,22 @@ class MenuController extends Controller
 
             // ← BARU: Sync addon ke menu
             if ($request->addon_ids) {
-                $menu->addons()->sync($request->addon_ids);
+                foreach ($request->addon_ids as $addonId) {
+                    DB::table('menu_addon')->insert([
+                        'id'         => (string) Str::uuid(),
+                        'menu_id'    => $menu->id,
+                        'addon_id'   => $addonId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
             }
 
             // Auto sync ke semua outlet usaha ini
             Outlet::where('usaha_id', $usahaId)->each(function ($outlet) use ($menu) {
                 MenuOutlet::firstOrCreate(
                     ['menu_id' => $menu->id, 'outlet_id' => $outlet->id],
-                    ['id' => Str::uuid(), 'harga' => $menu->harga_default, 'is_available' => true]
+                    ['id' => (string) Str::uuid(), 'harga' => $menu->harga_default, 'is_available' => true]
                 );
             });
 
@@ -198,7 +206,9 @@ class MenuController extends Controller
             'bahan_baku'                   => 'nullable|array',
             'bahan_baku.*.bahan_master_id' => 'required|exists:bahan_master,id',
             'bahan_baku.*.jumlah_pakai'    => 'required|numeric|min:0.01',
-            'bahan_baku.*.satuan_pakai'       => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
+            'bahan_baku.*.satuan_pakai'    => 'nullable|in:kg,gram,liter,ml,pcs,porsi,lusin,botol,sachet',
+            'addon_ids'                    => 'nullable|array',
+            'addon_ids.*'                  => 'string|exists:addon,id',
         ]);
         
         // Sebelum update, cek duplikat jika nama diubah
@@ -240,7 +250,7 @@ class MenuController extends Controller
 
                 foreach ($request->bahan_baku as $item) {
                     DB::table('menu_bahan')->insert([
-                        'id'              => Str::uuid(),
+                        'id'              => (string) Str::uuid(),
                         'menu_id'         => $menu->id,
                         'bahan_master_id' => $item['bahan_master_id'],
                         'jumlah_pakai'    => $item['jumlah_pakai'],
@@ -272,13 +282,11 @@ class MenuController extends Controller
         });
     }
 
-    // DELETE /owner/menu/{id}
     public function destroy(string $id)
     {
         $usahaId = $this->getUsahaId();
         $menu    = $this->validateMilikUsaha(Menu::class, $id);
 
-        $this->imageService->delete($menu->gambar);
         $menu->delete();
 
         ActivityLogService::log(

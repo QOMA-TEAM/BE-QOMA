@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Public\MenuPublicController;
 use App\Http\Controllers\Api\Public\PesananPublicController;
+use App\Http\Controllers\Api\Public\LandingController;
 use Illuminate\Support\Facades\Route;
 
 // ============================================================
@@ -20,3 +21,6 @@ Route::get('menu/{id}',  [MenuPublicController::class, 'show']);
 Route::post('pesanan',      [PesananPublicController::class, 'store']);
 Route::get ('pesanan/{id}', [PesananPublicController::class, 'show']);
 Route::post('pesanan/{id}/cancel', [PesananPublicController::class, 'cancel']);
+
+// Landing page
+Route::get('landing/plans', [LandingController::class, 'plans']);

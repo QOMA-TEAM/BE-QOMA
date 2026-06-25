@@ -22,7 +22,7 @@ class NotificationController extends Controller
     public function getUnreadCount()
     {
         $count = Notification::where('user_id', auth('api')->id() ?? auth()->id())
-                             ->where('is_read', false)
+                             ->where('is_read', 'false')
                              ->count();
                              
         return response()->json([

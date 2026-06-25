@@ -48,7 +48,7 @@ class NotifikasiSubscriptionHabis extends Command
             // Notif ke SEMUA outlet milik usaha ini
             $outletUsers = \App\Models\User::whereHas('role', fn($q) => $q->where('name', 'outlet'))
                 ->where('usaha_id', $usaha->id)
-                ->where('is_active', true)
+                ->where('is_active', 'true')
                 ->pluck('id');
 
             foreach ($outletUsers as $userId) {

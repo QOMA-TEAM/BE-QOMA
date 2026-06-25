@@ -1,9 +1,11 @@
 <?php
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Menu extends Model
 {
+    use SoftDeletes;
     protected $table = 'menu';
     protected $keyType = 'string';
     public $incrementing = false;
@@ -11,7 +13,15 @@ class Menu extends Model
         'id', 'usaha_id', 'kategori_id', 'nama',
         'harga_default', 'gambar', 'keterangan', 'is_active',
     ];
-    protected $casts = ['harga_default' => 'decimal:2', 'is_active' => 'boolean'];
+    protected $casts = ['harga_default' => 'decimal:2'];
+
+    protected function isActive(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            set: fn ($value) => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false',
+        );
+    }
 
     public function kategori()    { return $this->belongsTo(KategoriMenu::class, 'kategori_id'); }
     public function usaha()       { return $this->belongsTo(Usaha::class, 'usaha_id'); }

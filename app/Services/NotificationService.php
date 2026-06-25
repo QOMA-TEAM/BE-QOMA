@@ -12,7 +12,7 @@ class NotificationService
     public static function notifySuperAdmins(string $title, string $message, string $type, array $data = []): void
     {
         $superAdmins = User::whereHas('role', fn($q) => $q->where('name', 'super_admin'))
-                           ->where('is_active', true)
+                           ->where('is_active', 'true')
                            ->get();
 
         foreach ($superAdmins as $admin) {

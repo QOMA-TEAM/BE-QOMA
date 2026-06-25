@@ -7,7 +7,7 @@ use App\Models\BahanMaster;
 use App\Services\ActivityLogService;
 use App\Traits\{HasPagination, OwnerAccess};
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Storage, DB};
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Services\ImageService;
 
@@ -30,7 +30,7 @@ class BahanMasterController extends Controller
         $query = BahanMaster::where('usaha_id', $usahaId);
 
         if ($request->search) {
-            $query->where('nama', 'like', "%{$request->search}%");
+            $query->where('nama', 'ilike', "%{$request->search}%");
         }
 
         $bahans = $query->orderBy('nama')
@@ -53,12 +53,12 @@ class BahanMasterController extends Controller
 
         // Cek duplikat case-insensitive per usaha
         $duplikat = BahanMaster::where('usaha_id', $usahaId)
-                            ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
+                            ->whereRaw('LOWER(nama) = ?', [strtolower($request->input('nama'))])
                             ->exists();
 
         if ($duplikat) {
             return response()->json([
-                'message' => "Bahan baku '{$request->nama}' sudah ada di usaha ini.",
+                'message' => "Bahan baku '{$request->input('nama')}' sudah ada di usaha ini.",
                 'code'    => 'DUPLICATE',
             ], 422);
         }
@@ -67,28 +67,28 @@ class BahanMasterController extends Controller
             ? $this->imageService->upload($request->file('gambar'), "bahan-master/{$usahaId}")
             : null;
 
-        $satuanDasar     = \App\Helpers\SatuanHelper::getSatuanDasar($request->satuan);
-        $konversiKeDasar = match(strtolower($request->satuan)) {
+        $satuanDasar     = \App\Helpers\SatuanHelper::getSatuanDasar($request->input('satuan'));
+        $konversiKeDasar = match(strtolower($request->input('satuan'))) {
             'kg'    => 1000,
             'liter' => 1000,
             'lusin' => 12,
             default => 1,
         };
 
-        BahanMaster::create([
-            'id'               => Str::uuid(),
+        $bahan = BahanMaster::create([
+            'id'               => (string) Str::uuid(),
             'usaha_id'         => $usahaId,
-            'nama'             => $request->nama,
-            'satuan'           => $request->satuan,
+            'nama'             => $request->input('nama'),
+            'satuan'           => $request->input('satuan'),
             'satuan_dasar'     => $satuanDasar,      
             'konversi_ke_dasar'=> $konversiKeDasar,  
-            'harga_default'    => $request->harga_default,
+            'harga_default'    => $request->input('harga_default'),
             'gambar'           => $gambarPath,
         ]);
 
         ActivityLogService::log(
             'create_bahan_master',
-            "Bahan baku '{$bahan->nama}' (Rp " . number_format($bahan->harga_default) . "/{$bahan->satuan}) ditambahkan",
+            "Bahan baku '{$bahan->nama}' (Rp " . number_format((float) $bahan->harga_default) . "/{$bahan->satuan}) ditambahkan",
             ['bahan_id' => $bahan->id, 'nama' => $bahan->nama],
             $usahaId,
         );
@@ -124,15 +124,15 @@ class BahanMasterController extends Controller
         ]);
 
         // Cek duplikat nama jika nama diubah
-        if ($request->filled('nama') && strtolower($request->nama) !== strtolower($bahan->nama)) {
+        if ($request->filled('nama') && strtolower($request->input('nama')) !== strtolower($bahan->nama)) {
             $duplikat = BahanMaster::where('usaha_id', $usahaId)
                                 ->where('id', '!=', $id)
-                                ->whereRaw('LOWER(nama) = ?', [strtolower($request->nama)])
+                                ->whereRaw('LOWER(nama) = ?', [strtolower($request->input('nama'))])
                                 ->exists();
 
             if ($duplikat) {
                 return response()->json([
-                    'message' => "Bahan baku '{$request->nama}' sudah ada.",
+                    'message' => "Bahan baku '{$request->input('nama')}' sudah ada.",
                     'code'    => 'DUPLICATE',
                 ], 422);
             }
@@ -146,9 +146,9 @@ class BahanMasterController extends Controller
         $konversiKeDasar = $bahan->konversi_ke_dasar;
 
         if ($request->filled('satuan')) {
-            $satuanDasar = \App\Helpers\SatuanHelper::getSatuanDasar($request->satuan);
+            $satuanDasar = \App\Helpers\SatuanHelper::getSatuanDasar($request->input('satuan'));
 
-            $konversiKeDasar = match (strtolower($request->satuan)) {
+            $konversiKeDasar = match (strtolower($request->input('satuan'))) {
                 'kg'    => 1000,
                 'liter' => 1000,
                 'lusin' => 12,
@@ -157,11 +157,11 @@ class BahanMasterController extends Controller
         }
 
         $bahan->update([
-            'nama'              => $request->nama ?? $bahan->nama,
-            'satuan'            => $request->satuan ?? $bahan->satuan,
+            'nama'              => $request->input('nama', $bahan->nama),
+            'satuan'            => $request->input('satuan', $bahan->satuan),
             'satuan_dasar'      => $satuanDasar,
             'konversi_ke_dasar' => $konversiKeDasar,
-            'harga_default'     => $request->harga_default ?? $bahan->harga_default,
+            'harga_default'     => $request->input('harga_default', $bahan->harga_default),
             'gambar'            => $gambarPath,
         ]);
         
@@ -196,7 +196,6 @@ class BahanMasterController extends Controller
             ], 422);
         }
 
-        $this->imageService->delete($bahan->gambar);
         $bahan->delete();
 
         ActivityLogService::log(
