@@ -110,7 +110,7 @@ class CheckSubscription
 
         if ($existingQueue) return;
 
-        $freePlan = Plan::where('is_lifetime', true)
+        $freePlan = Plan::where('is_lifetime', 'true')
             ->orderBy('harga')
             ->first();
 

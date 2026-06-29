@@ -2,6 +2,15 @@
 
 use Illuminate\Support\Facades\Route;
 
+// Public Test Route
+Route::get('/', function () {
+    return response()->json([
+        'success' => true,
+        'message' => 'API is successfully connected and running!',
+        'timestamp' => now()->toDateTimeString()
+    ]);
+});
+
 // Auth
 Route::prefix('auth')->group(base_path('routes/auth.php'));
 
@@ -20,8 +29,8 @@ Route::prefix('outlet')->group(base_path('routes/outlet.php'));
 // Shared Authenticated Routes
 Route::middleware('role')->prefix('shared')->group(function () {
     // Notifications
-    Route::get  ('notifications',              [\App\Http\Controllers\Api\Shared\NotificationController::class, 'index']);
-    Route::get  ('notifications/unread-count', [\App\Http\Controllers\Api\Shared\NotificationController::class, 'getUnreadCount']);
-    Route::patch('notifications/read-all',     [\App\Http\Controllers\Api\Shared\NotificationController::class, 'markAllRead']);
-    Route::patch('notifications/{id}/read',    [\App\Http\Controllers\Api\Shared\NotificationController::class, 'markRead']);
+    Route::get('notifications', [\App\Http\Controllers\Api\Shared\NotificationController::class, 'index']);
+    Route::get('notifications/unread-count', [\App\Http\Controllers\Api\Shared\NotificationController::class, 'getUnreadCount']);
+    Route::patch('notifications/read-all', [\App\Http\Controllers\Api\Shared\NotificationController::class, 'markAllRead']);
+    Route::patch('notifications/{id}/read', [\App\Http\Controllers\Api\Shared\NotificationController::class, 'markRead']);
 });

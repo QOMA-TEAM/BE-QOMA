@@ -24,6 +24,10 @@ class Plan extends Model
         'status'
     ];
 
+    protected $casts = [
+        'is_lifetime' => 'boolean',
+    ];
+
     public function subscriptions()
     {
         return $this->hasMany(
