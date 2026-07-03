@@ -70,6 +70,8 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', true),
             'visibility'              => 'public',
             'throw'                   => false,
+            'supabase_url'            => env('SUPABASE_URL'),
+            'supabase_bucket'         => env('SUPABASE_STORAGE_BUCKET'),
         ],
 
     ],

@@ -13,7 +13,11 @@ class ImageService
     public function __construct()
     {
         $this->disk      = config('filesystems.default', 'supabase');
-        $this->publicUrl = env('SUPABASE_URL') . '/storage/v1/object/public/' . env('SUPABASE_STORAGE_BUCKET');
+        
+        $supabaseUrl = config('filesystems.disks.supabase.supabase_url');
+        $supabaseBucket = config('filesystems.disks.supabase.supabase_bucket');
+        
+        $this->publicUrl = $supabaseUrl ? ($supabaseUrl . '/storage/v1/object/public/' . $supabaseBucket) : null;
     }
 
     /**
