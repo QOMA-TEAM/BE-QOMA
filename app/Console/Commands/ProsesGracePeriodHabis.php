@@ -144,7 +144,7 @@ class ProsesGracePeriodHabis extends Command
                 $outlet->update(['status_buka' => 'false']);
 
                 // Nonaktifkan user outlet ini
-                User::where('outlet_id', $outlet->id)->update(['is_active' => false]);
+                User::where('outlet_id', $outlet->id)->update(['is_active' => DB::raw('false')]);
 
                 // Notif outlet
                 $outletUsers = User::where('outlet_id', $outlet->id)->pluck('id');

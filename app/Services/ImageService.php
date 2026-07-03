@@ -70,6 +70,11 @@ class ImageService
     {
         if (!$path) return null;
 
+        // Jika path sudah berupa URL utuh (terjadi karena next.js atau migrasi DB sebelumnya), langsung return
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
         // Kalau masih pakai disk supabase
         if ($this->disk === 'supabase') {
             return $this->publicUrl . '/' . ltrim($path, '/');

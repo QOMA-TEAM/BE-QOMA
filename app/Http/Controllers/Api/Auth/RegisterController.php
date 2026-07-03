@@ -33,7 +33,7 @@ class RegisterController extends Controller
             // Data Owner
             'nama_owner'          => 'required|string|max:100',  
             'username'            => 'required|string|min:4|unique:users,username',
-            'email'               => 'required|email|unique:users,email',
+            'email'               => 'required|email|unique:users,email|unique:usaha,email',
             'no_telp'             => 'required|string|max:20',  
             'password'            => 'required|string|min:6|confirmed',
 

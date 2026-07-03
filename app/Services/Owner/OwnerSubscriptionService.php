@@ -205,7 +205,7 @@ class OwnerSubscriptionService
                 $outlet->update(['status_buka' => 'false']);
 
                 // Nonaktifkan user outlet
-                \App\Models\User::where('outlet_id', $outletId)->update(['is_active' => false]);
+                \App\Models\User::where('outlet_id', $outletId)->update(['is_active' => DB::raw('false')]);
 
                 // Notif outlet
                 $outletUsers = \App\Models\User::where('outlet_id', $outletId)->pluck('id');
