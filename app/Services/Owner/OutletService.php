@@ -57,29 +57,6 @@ class OutletService
         return DB::transaction(function () use ($data, $usahaId) {
             $this->validateOutletLimit($usahaId);
 
-            $outlet = Outlet::create([
-                'id'          => Str::uuid(),
-                'usaha_id'    => $usahaId,
-                'nama_outlet' => $data['nama_outlet'],
-                'alamat'      => $data['alamat'] ?? null,
-                'status_buka' => 'true',
-                'email'       => $data['email_outlet'], 
-            ]);
-
-            $role = Role::where('name', 'outlet')->first();
-
-            $user = User::create([
-                'id'           => Str::uuid(),
-                'role_id'      => $role->id,
-                'usaha_id'     => $usahaId,
-                'outlet_id'    => $outlet->id,
-                'username'     => $data['username'],
-                'nama_lengkap' => $data['nama_outlet'],
-                'email'        => $data['email_outlet'], 
-                'password'     => Hash::make($data['password']),
-                'is_active'    => DB::raw('true'),
-            ]);
-
             $iconPath   = isset($data['gambar_icon'])
                 ? app(\App\Services\ImageService::class)->upload($data['gambar_icon'], "outlet/{$usahaId}/icon")
                 : null;
@@ -95,8 +72,22 @@ class OutletService
                 'alamat'        => $data['alamat'] ?? null,
                 'status_buka'   => 'true',
                 'email'         => $data['email_outlet'],
-                'gambar_icon'   => $iconPath,    // ← TAMBAHKAN
-                'gambar_header' => $headerPath,  // ← TAMBAHKAN
+                'gambar_icon'   => $iconPath,
+                'gambar_header' => $headerPath,
+            ]);
+
+            $role = Role::where('name', 'outlet')->first();
+
+            $user = User::create([
+                'id'           => Str::uuid(),
+                'role_id'      => $role->id,
+                'usaha_id'     => $usahaId,
+                'outlet_id'    => $outlet->id,
+                'username'     => $data['username'],
+                'nama_lengkap' => $data['nama_outlet'],
+                'email'        => $data['email_outlet'], 
+                'password'     => Hash::make($data['password']),
+                'is_active'    => DB::raw('true'),
             ]);
 
             $this->syncMenuOutlet($outlet->id, $usahaId);
