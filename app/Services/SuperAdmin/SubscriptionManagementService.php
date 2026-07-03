@@ -3,6 +3,7 @@ namespace App\Services\SuperAdmin;
 
 use App\Models\{Subscription, Usaha, User};
 use App\Services\{ActivityLogService, NotificationService};
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SubscriptionManagementService
@@ -62,7 +63,7 @@ class SubscriptionManagementService
                 $usaha?->update(['status' => 'active', 'approved_at' => now()]);
 
                 if ($usaha?->owner_id) {
-                    User::where('id', $usaha->owner_id)->update(['is_active' => true]);
+                    User::where('id', $usaha->owner_id)->update(['is_active' => DB::raw('true')]);
 
                     NotificationService::notify(
                         $usaha->owner_id,
