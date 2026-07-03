@@ -77,7 +77,7 @@ class OutletService
                 'nama_lengkap' => $data['nama_outlet'],
                 'email'        => $data['email_outlet'], 
                 'password'     => Hash::make($data['password']),
-                'is_active'    => true,
+                'is_active'    => DB::raw('true'),
             ]);
 
             $iconPath   = isset($data['gambar_icon'])

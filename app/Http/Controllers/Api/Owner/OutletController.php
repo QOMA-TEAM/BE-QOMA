@@ -26,7 +26,7 @@ class OutletController extends Controller
         $request->validate([
         'nama_outlet'   => 'required|string|max:100',
         'alamat'        => 'nullable|string',
-        'email_outlet'  => 'required|email|unique:users,email',
+        'email_outlet'  => 'required|email|unique:users,email|unique:outlet,email',
         'username'      => 'required|string|min:4|unique:users,username',
         'password'      => 'required|string|min:6',
         'gambar_icon'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048', 
@@ -49,6 +49,15 @@ class OutletController extends Controller
 
     public function update(Request $request, string $usahaId, string $id)
     {
+        $this->gate($usahaId);
+        $request->validate([
+            'nama_outlet'   => 'nullable|string|max:100',
+            'alamat'        => 'nullable|string',
+            'email'         => 'nullable|email|unique:outlet,email,' . $id,
+            'gambar_icon'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048', 
+            'gambar_header' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048', 
+        ]);
+
         $outlet = $this->findOwned($usahaId, $id);
         $outlet = $this->service->update($outlet, $request->all());
         return response()->json(['message' => 'Outlet diupdate', 'data' => $outlet]);

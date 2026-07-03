@@ -2,7 +2,7 @@
 namespace App\Services\SuperAdmin;
 use App\Models\{Usaha, UsahaRejection, User};
 use App\Services\{ActivityLogService, NotificationService};
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\{DB, Hash};
 use Illuminate\Support\Str;
 
 class UsahaManagementService
@@ -59,7 +59,7 @@ class UsahaManagementService
 
         // Aktifkan owner
         if ($usaha->owner_id) {
-            User::where('id', $usaha->owner_id)->update(['is_active' => true]);
+            User::where('id', $usaha->owner_id)->update(['is_active' => DB::raw('true')]);
         }
 
         // Kirim notifikasi ke owner
@@ -94,7 +94,7 @@ class UsahaManagementService
         ]);
 
         if ($usaha->owner_id) {
-            User::where('id', $usaha->owner_id)->update(['is_active' => false]);
+            User::where('id', $usaha->owner_id)->update(['is_active' => DB::raw('false')]);
 
             NotificationService::notify(
                 $usaha->owner_id,
@@ -221,6 +221,6 @@ class UsahaManagementService
 
     private function toggleUsahaUsers(Usaha $usaha, bool $isActive): void
     {
-        User::where('usaha_id', $usaha->id)->update(['is_active' => $isActive]);
+        User::where('usaha_id', $usaha->id)->update(['is_active' => DB::raw($isActive ? 'true' : 'false')]);
     }
 }
