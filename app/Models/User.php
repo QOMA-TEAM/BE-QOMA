@@ -33,4 +33,30 @@ class User extends Authenticatable implements JWTSubject
     public function role()   { return $this->belongsTo(Role::class, 'role_id'); }
     public function usaha()  { return $this->belongsTo(Usaha::class, 'usaha_id'); }
     public function outlet() { return $this->belongsTo(Outlet::class, 'outlet_id'); }
+
+    public function passwordHistories()
+    {
+        return $this->hasMany(PasswordHistory::class);
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($user) {
+            if ($user->password) {
+                $user->passwordHistories()->create([
+                    'id' => \Illuminate\Support\Str::uuid(),
+                    'password' => $user->password,
+                ]);
+            }
+        });
+
+        static::updated(function ($user) {
+            if ($user->wasChanged('password')) {
+                $user->passwordHistories()->create([
+                    'id' => \Illuminate\Support\Str::uuid(),
+                    'password' => $user->password,
+                ]);
+            }
+        });
+    }
 }
