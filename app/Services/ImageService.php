@@ -12,12 +12,8 @@ class ImageService
 
     public function __construct()
     {
-        $this->disk      = config('filesystems.default', 'supabase');
-        
-        $supabaseUrl = config('filesystems.disks.supabase.supabase_url');
-        $supabaseBucket = config('filesystems.disks.supabase.supabase_bucket');
-        
-        $this->publicUrl = $supabaseUrl ? ($supabaseUrl . '/storage/v1/object/public/' . $supabaseBucket) : null;
+        $this->disk = config('filesystems.default', 'supabase');
+        $this->publicUrl = env('SUPABASE_URL') . '/storage/v1/object/public/' . env('SUPABASE_STORAGE_BUCKET');
     }
 
     /**
@@ -28,7 +24,7 @@ class ImageService
     public function upload(UploadedFile $file, string $folder): string
     {
         $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $path     = $folder . '/' . $filename;
+        $path = $folder . '/' . $filename;
 
         Storage::disk($this->disk)->put($path, file_get_contents($file), 'public');
 
@@ -40,7 +36,8 @@ class ImageService
      */
     public function delete(?string $path): void
     {
-        if (!$path) return;
+        if (!$path)
+            return;
 
         // If the path is a full URL, strip the base URL
         if ($this->publicUrl && str_starts_with($path, $this->publicUrl)) {
@@ -72,7 +69,8 @@ class ImageService
      */
     public function url(?string $path): ?string
     {
-        if (!$path) return null;
+        if (!$path)
+            return null;
 
         // Jika path sudah berupa URL utuh (terjadi karena next.js atau migrasi DB sebelumnya), langsung return
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
