@@ -35,13 +35,14 @@ class NotificationController extends Controller
 
     public function markRead(string $id)
     {
-        Notification::where('id', $id)->where('user_id', auth('api')->id() ?? auth()->id())->update(['is_read' => true]);
+        Notification::where('id', $id)->where('user_id', auth('api')->id() ?? auth()->id())->update(['is_read' => 'true']);
         return response()->json(['message' => 'Notifikasi ditandai sudah dibaca']);
     }
 
     public function markAllRead()
     {
-        Notification::where('user_id', auth('api')->id() ?? auth()->id())->update(['is_read' => true]);
+        $userId = auth('api')->id() ?? auth()->id();
+        Notification::where('user_id', $userId)->update(['is_read' => 'true']);
         return response()->json(['message' => 'Semua notifikasi ditandai sudah dibaca']);
     }
 }

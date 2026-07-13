@@ -3,6 +3,7 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
+use App\Models\User;
 use App\Services\Auth\RegisterService;
 use Illuminate\Http\Request;
 
@@ -61,5 +62,12 @@ class RegisterController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+    }
+
+    public function checkUsername(Request $request)
+    {
+        $request->validate(['username' => 'required|string']);
+        $exists = User::where('username', $request->username)->exists();
+        return response()->json(['available' => !$exists]);
     }
 }

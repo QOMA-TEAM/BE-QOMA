@@ -31,7 +31,18 @@ class ChangePasswordController extends Controller
             ], 422);
         }
 
-        // Cek password baru tidak sama dengan yang lama
+        // Cek password baru tidak sama dengan yang lama dan seluruh histori sebelumnya
+        $histories = $user->passwordHistories;
+        foreach ($histories as $history) {
+            if (Hash::check($request->password_baru, $history->password)) {
+                return response()->json([
+                    'message' => 'Password tidak boleh sama dengan password-password sebelumnya.',
+                    'code'    => 'SAME_AS_HISTORY_PASSWORD',
+                ], 422);
+            }
+        }
+        
+        // Fallback jika histories kosong (untuk data lama), pastikan juga tidak sama dengan password sekarang
         if (Hash::check($request->password_baru, $user->password)) {
             return response()->json([
                 'message' => 'Password baru tidak boleh sama dengan password lama.',
@@ -39,7 +50,7 @@ class ChangePasswordController extends Controller
             ], 422);
         }
 
-        // Update password
+        // Update password (event updated di User model otomatis menyimpan ke histori)
         $user->update([
             'password' => Hash::make($request->password_baru),
         ]);

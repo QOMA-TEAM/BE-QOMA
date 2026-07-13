@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 // PUBLIC — tidak butuh middleware apapun
 Route::get ('plans',    [RegisterController::class, 'plans']);
 Route::post('register', [RegisterController::class, 'register']);
+Route::get('check-username', [RegisterController::class, 'checkUsername']);
 Route::post('login',    [AuthController::class, 'login']);
 Route::post('refresh',  [AuthController::class, 'refresh']);
 
