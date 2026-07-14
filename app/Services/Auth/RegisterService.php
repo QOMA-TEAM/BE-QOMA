@@ -23,7 +23,7 @@ class RegisterService
                 'email'        => $data['email'],
                 'no_telp'      => $data['no_telp'],     // ← BARU
                 'password'     => Hash::make($data['password']),
-                'is_active'    => DB::raw('false'),
+                'is_active'    => false,
             ]);
 
             // 2. Buat usaha
